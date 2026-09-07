@@ -1,0 +1,33 @@
+name: Windows build and offline audio tests
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+concurrency:
+  group: windows-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build and test
+        shell: pwsh
+        run: ./scripts/build.ps1
+      - name: Offline graph and WAV integrity
+        shell: pwsh
+        run: ./scripts/verify.ps1
+      - name: Package
+        shell: pwsh
+        run: ./scripts/package.ps1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: CantoDeck-windows-x64-unsigned
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            dist/*.zip
+            dist/*.sha256
+            build/evidence-*/

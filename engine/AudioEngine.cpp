@@ -1,0 +1,124 @@
+#include "AudioEngine.h"
+
+namespace canto {
+juce::String Recorder::start(const juce::File& file,double sr,bool stems) {
+    stop(); queue.reset(); failed=false; dropped=0; frames=0;
+    if(file.exists()) return "Recording already exists";
+    auto makeWriter=[sr](const juce::File& f,int channels) -> std::unique_ptr<juce::AudioFormatWriter> {
+        auto stream=f.createOutputStream(); if(!stream || stream->failedToOpen()) return {};
+        juce::WavAudioFormat wav;
+        auto* w=wav.createWriterFor(stream.get(),sr,(unsigned)channels,24,{},0);
+        if(w) stream.release(); return std::unique_ptr<juce::AudioFormatWriter>(w);
+    };
+    auto dryFile=file.getSiblingFile(file.getFileNameWithoutExtension()+"-dry.wav");
+    auto wetFile=file.getSiblingFile(file.getFileNameWithoutExtension()+"-wet.wav");
+    if(stems && (dryFile.exists() || wetFile.exists())) return "Stem already exists";
+    auto mix=makeWriter(file,2); auto dry=stems?makeWriter(dryFile,1):nullptr; auto wet=stems?makeWriter(wetFile,1):nullptr;
+    if(!mix || (stems && (!dry || !wet))) return "Cannot create WAV files";
+    running=true; active=true;
+    worker=std::thread([this,sr,m=std::move(mix),d=std::move(dry),w=std::move(wet)]() mutable {
+        juce::AudioBuffer<float> mb(2,1024),db(1,1024),wb(1,1024);
+        while(running.load() || queue.size()>0) {
+            RecordedFrame f{}; int n=0;
+            while(n<1024 && queue.pop(f)) { mb.setSample(0,n,f.left); mb.setSample(1,n,f.right); db.setSample(0,n,f.dry); wb.setSample(0,n,f.wet); ++n; }
+            if(n>0) {
+                bool ok=m->writeFromAudioSampleBuffer(mb,0,n);
+                if(d) ok=d->writeFromAudioSampleBuffer(db,0,n)&&ok;
+                if(w) ok=w->writeFromAudioSampleBuffer(wb,0,n)&&ok;
+                frames+=uint64_t(n);
+                // Stop before RIFF reaches 4 GiB; no silent truncation.
+                if(!ok || frames.load()>std::min(uint64_t(sr*3600*3),uint64_t(500000000))) { failed=true; active=false; running=false; break; }
+            } else std::this_thread::sleep_for(std::chrono::milliseconds(4));
+        }
+        m.reset(); d.reset(); w.reset();
+    }); return {};
+}
+void Recorder::stop() { active=false; running=false; if(worker.joinable()) worker.join(); }
+AudioEngine::AudioEngine() {
+#if JUCE_WINDOWS
+    type.reset(juce::AudioIODeviceType::createAudioIODeviceType_WASAPI(false));
+#endif
+    if(type) type->addListener(this); scan();
+}
+AudioEngine::~AudioEngine() { close(); if(type) type->removeListener(this); }
+void AudioEngine::scan() { if(type) type->scanForDevices(); }
+juce::StringArray AudioEngine::inputs() { return type?type->getDeviceNames(true):juce::StringArray{}; }
+juce::StringArray AudioEngine::outputs() { return type?type->getDeviceNames(false):juce::StringArray{}; }
+void AudioEngine::close() { params.monitor=false; if(output) output->stop(); if(input) input->stop(); recorder.stop(); output.reset(); input.reset(); }
+juce::String AudioEngine::connect(const juce::String& in,const juce::String& out,double requested,int block,bool lowLatency) {
+    close(); fault=false;
+#if JUCE_WINDOWS
+    if(lowLatencyMode!=lowLatency) {
+        if(type) type->removeListener(this);
+        type.reset(juce::AudioIODeviceType::createAudioIODeviceType_WASAPI(lowLatency?juce::WASAPIDeviceMode::sharedLowLatency:juce::WASAPIDeviceMode::shared));
+        lowLatencyMode=lowLatency;
+        if(type) type->addListener(this);
+        scan();
+    }
+#endif
+    if(!type || in.isEmpty() || out.isEmpty()) return "Select microphone and output";
+    input.reset(type->createDevice({},in)); output.reset(type->createDevice(out,{}));
+    if(!input || !output) { close(); return "Endpoint unavailable"; }
+    juce::BigInteger ins,outs; ins.setRange(0,juce::jmin(2,input->getInputChannelNames().size()),true); outs.setRange(0,juce::jmin(2,output->getOutputChannelNames().size()),true);
+    auto open=[requested,block](juce::AudioIODevice& d,const juce::BigInteger& i,const juce::BigInteger& o) {
+        auto rates=d.getAvailableSampleRates(); double sr=rates.contains(requested)?requested:(rates.isEmpty()?48000:rates[0]);
+        auto sizes=d.getAvailableBufferSizes(); int selected=block;
+        if(!sizes.isEmpty()) { selected=sizes[0]; for(auto size:sizes) if(std::abs(size-block)<std::abs(selected-block)) selected=size; }
+        return d.open(i,o,sr,selected);
+    };
+    auto error=open(*input,ins,{}); if(error.isEmpty()) error=open(*output,{},outs);
+    if(error.isNotEmpty()) { close(); return error; }
+    rate=output->getCurrentSampleRate(); expectedInputRate=input->getCurrentSampleRate(); dsp.prepare(rate); monitorGain=masterGain=musicGain=0; testRemaining=0;
+    bridge.prepare(input->getCurrentSampleRate(),rate,juce::jmax(input->getCurrentBufferSizeSamples(),output->getCurrentBufferSizeSamples()),lowLatencyMode,input->getCurrentBufferSizeSamples(),output->getCurrentBufferSizeSamples());
+    input->start(&capture); output->start(&playback); return {};
+}
+void AudioEngine::Callback::audioDeviceIOCallbackWithContext(const float* const* i,int ni,float* const* o,int no,int n,const juce::AudioIODeviceCallbackContext&) { owner.render(i,ni,o,no,n,input); }
+void AudioEngine::render(const float* const* in,int ni,float* const* out,int no,int n,bool isInput) noexcept {
+    juce::ScopedNoDenormals guard;
+    if(isInput) {
+        float peak=0; const int ch=params.channel.load();
+        for(int k=0;k<n;++k) { float v=ni>0&&in[0]?in[0][k]:0; if(ch==1) v=ni>1&&in[1]?in[1][k]:0; else if(ch==2 && ni>1&&in[1]) v=(v+in[1][k])*0.5f; v=clean(v); peak=std::max(peak,std::abs(v)); bridge.push(v); }
+        inputPeak=std::max(peak,inputPeak.load()*0.92f); return;
+    }
+    const auto begin=juce::Time::getHighResolutionTicks();
+    bridge.beginBlock(); const auto wanted=seek.exchange(-1); if(wanted>=0) position=std::clamp(wanted,0.0,duration)*trackRate;
+    if(testRequested.exchange(false)) { testRemaining=int(rate*0.5); testPhase=0; }
+    float peak=0,mp=0;
+    for(int k=0;k<n;++k) {
+        const float dry=bridge.next(), wet=dsp.process(dry,params);
+        monitorGain+=0.002f*((params.monitor.load()&&!fault.load()?1.f:0.f)-monitorGain);
+        masterGain+=0.001f*(params.master.load()-masterGain);
+        musicGain+=0.001f*((params.musicMute.load()?0.f:params.music.load())-musicGain);
+        float music[2]{};
+        if(playing.load() && track.getNumSamples()>1) {
+            if(position>=track.getNumSamples()-1) playing=false;
+            else { int ix=int(position); float f=float(position-ix); for(int c=0;c<2;++c) { const float* p=track.getReadPointer(std::min(c,track.getNumChannels()-1)); music[c]=(p[ix]+(p[ix+1]-p[ix])*f)*musicGain; } position+=trackRate/rate; }
+        }
+        float tone=0; if(testRemaining>0) { tone=float(std::sin(testPhase))*0.025f*std::min(1.f,testRemaining/256.f); testPhase+=2*juce::MathConstants<double>::pi*440/rate; --testRemaining; }
+        float mix[2];
+        for(int c=0;c<2;++c) { float v=clean((wet*monitorGain+music[c]+tone)*masterGain); if(std::abs(v)>0.95f) ++clipped; mix[c]=(params.mute.load()||fault.load())?0.f:std::clamp(v,-0.95f,0.95f); peak=std::max(peak,std::abs(mix[c])); mp=std::max(mp,std::abs(music[c])); }
+        for(int c=0;c<no;++c) if(out[c]) out[c][k]=mix[std::min(c,1)];
+        recorder.push({mix[0],mix[1],params.mute.load()?0.f:dry,params.mute.load()?0.f:wet});
+    }
+    seconds=position/trackRate; outputPeak=std::max(peak,outputPeak.load()*0.92f); musicPeak=std::max(mp,musicPeak.load()*0.92f);
+    callbackLoad=juce::Time::highResolutionTicksToSeconds(juce::Time::getHighResolutionTicks()-begin)/(n/rate);
+}
+juce::String AudioEngine::loadTrack(const juce::File& file) {
+    juce::WavAudioFormat format; auto stream=file.createInputStream(); if(!stream) return "Cannot open file";
+    std::unique_ptr<juce::AudioFormatReader> reader(format.createReaderFor(stream.release(),true));
+    if(!reader || reader->lengthInSamples<2 || reader->lengthInSamples>48000LL*60*45 || reader->numChannels>2) return "Use mono/stereo WAV, maximum 45 minutes at 48 kHz";
+    juce::AudioBuffer<float> next((int)reader->numChannels,(int)reader->lengthInSamples);
+    if(!reader->read(&next,0,next.getNumSamples(),0,true,true)) return "WAV decoding failed";
+    if(recorder.active.load()) return "Stop recording before changing track";
+    const bool was=output&&output->isPlaying(); if(was) output->stop();
+    playing=false; track=std::move(next); trackRate=reader->sampleRate; position=0; seconds=0; duration=track.getNumSamples()/trackRate; trackName=file.getFileName();
+    if(was) output->start(&playback); return {};
+}
+juce::String AudioEngine::record(const juce::File& file,bool stems) { if(!connected()) return "Connect audio first"; bool monitoring=params.monitor.load(); output->stop(); auto e=recorder.start(file,rate,stems); output->start(&playback); params.monitor=monitoring&&!fault.load(); return e; }
+void AudioEngine::stopRecording() { bool was=output&&output->isPlaying(),monitoring=params.monitor.load(); if(was) output->stop(); recorder.stop(); if(was) output->start(&playback); params.monitor=monitoring&&!fault.load(); }
+juce::String AudioEngine::diagnostics() const {
+    juce::String s="CantoDeck 0.1.0 | JUCE 8.0.15 | "+juce::SystemStats::getOperatingSystemName()+(lowLatencyMode?"\nWASAPI shared LOW LATENCY | adaptive linear resampler\n":"\nWASAPI shared | adaptive linear resampler\n");
+    if(output && input) s+="Input: "+juce::String(input->getCurrentSampleRate())+" Hz / "+juce::String(input->getCurrentBufferSizeSamples())+" samples; output: "+juce::String(rate)+" Hz / "+juce::String(output->getCurrentBufferSizeSamples())+" samples\nDriver latency input/output: "+juce::String(input->getInputLatencyInSamples())+" / "+juce::String(output->getOutputLatencyInSamples())+" samples\n";
+    s+="FIFO: "+juce::String((int)bridge.buffered())+" samples; target: "+juce::String((int)bridge.targetFrames())+"; ratio: "+juce::String(bridge.ratio.load(),6)+"; under/over: "+juce::String(bridge.underruns.load())+" / "+juce::String(bridge.overruns.load())+"\nCallback load: "+juce::String(callbackLoad.load()*100,1)+"%; clipped samples: "+juce::String(clipped.load())+"\nRecording dropped: "+juce::String(recorder.dropped.load())+"; fault: "+juce::String(fault.load()?"yes":"no")+"\nRound-trip latency: NOT MEASURED. Sample-peak clamp, not true-peak.\nBrowser audio is NOT included in recording."; return s;
+}
+}

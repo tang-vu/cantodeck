@@ -1,0 +1,31 @@
+name: Bug report
+description: Report an audio, device, UI, or build problem.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: "This is a development preview. For security issues use SECURITY.md. Remove private paths and identifiers from diagnostics."
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Build and audio setup
+      description: "Commit/build, Windows version, microphone/output model, wired headphones or speakers, backend, actual rate and buffers, effects, physical direct monitoring."
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Diagnostics or test evidence
+      description: "Optional. Distinguish measured latency from driver-reported buffers. Do not attach private recordings."
