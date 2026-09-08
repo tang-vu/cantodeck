@@ -54,4 +54,4 @@ Nếu mic nhỏ: bản mới có **Mic boost dB** ngay trên màn hình chính. 
 
 Trong Nâng cao có tốc độ/buffer thực, mức tải callback, bộ đệm đổi tốc độ, số lỗi và nút lưu chẩn đoán. Các con số buffer không phải độ trễ đo từ mic đến loa.
 
-Chỉ WAV mono/stereo; file lớn cần nhiều RAM và được đọc bằng luồng riêng. Khi đang đọc bài, nút tắt toàn bộ vẫn dùng được. Preset và tên thiết bị lưu trong `%APPDATA%\CantoDeck\session.json`; không tự kết nối hoặc tự bật nghe mic lần sau. Giao diện đã có VI/EN cho thao tác chính; thông số kỹ thuật/lỗi còn một phần tiếng Anh.
+Chỉ WAV mono/stereo. Nhạc được đọc từng khối ở luồng nền, không giữ cả bài trong RAM. Khi tua hoặc đọc không kịp, nhạc có thể tạm im và vị trí bài chờ dữ liệu; mic và thu âm vẫn tiếp tục. Lỗi đọc sẽ dừng nhạc và báo trên giao diện. File lớn/ổ đĩa chậm vẫn cần thử thực tế. Khi đang mở bài, nút tắt toàn bộ vẫn dùng được. Preset và thiết bị lưu trong `%APPDATA%\CantoDeck\session.json`; không tự kết nối hoặc tự bật nghe mic lần sau. Giao diện đã có VI/EN cho thao tác chính; thông số kỹ thuật/lỗi còn một phần tiếng Anh.

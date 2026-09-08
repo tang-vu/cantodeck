@@ -293,9 +293,15 @@ void AudioEngine::render(const float* const* in, int ni, float* const* out, int 
     }
     const auto begin = juce::Time::getHighResolutionTicks();
     bridge.beginBlock();
+    if (track)
+        track->beginBlock();
     const auto wanted = seek.exchange(-1);
     if (wanted >= 0)
+    {
         position = std::clamp(wanted, 0.0, duration) * trackRate;
+        if (track)
+            track->seek(int64_t(position));
+    }
     if (testRequested.exchange(false))
     {
         testRemaining = int(rate * 0.5);
@@ -309,20 +315,18 @@ void AudioEngine::render(const float* const* in, int ni, float* const* out, int 
         masterGain += 0.001f * (params.master.load() - masterGain);
         musicGain += 0.001f * ((params.musicMute.load() ? 0.f : params.music.load()) - musicGain);
         float music[2]{};
-        if (playing.load() && track.getNumSamples() > 1)
+        if (playing.load() && track)
         {
-            if (position >= track.getNumSamples() - 1)
+            if (position >= track->length - 1 || track->failed.load())
                 playing = false;
             else
             {
-                int ix = int(position);
-                float f = float(position - ix);
-                for (int c = 0; c < 2; ++c)
+                if (track->sample(position, music[0], music[1]))
                 {
-                    const float* p = track.getReadPointer(std::min(c, track.getNumChannels() - 1));
-                    music[c] = (p[ix] + (p[ix + 1] - p[ix]) * f) * musicGain;
+                    music[0] *= musicGain;
+                    music[1] *= musicGain;
+                    position += trackRate / rate;
                 }
-                position += trackRate / rate;
             }
         }
         float tone = 0;
@@ -366,26 +370,28 @@ juce::String AudioEngine::loadTrack(const juce::File& file)
     if (!stream)
         return "Cannot open file";
     std::unique_ptr<juce::AudioFormatReader> reader(format.createReaderFor(stream.release(), true));
-    if (!reader || reader->lengthInSamples < 2 || reader->lengthInSamples > 48000LL * 60 * 45 ||
-        reader->numChannels > 2)
-        return "Use mono/stereo WAV, maximum 45 minutes at 48 kHz";
-    juce::AudioBuffer<float> next((int)reader->numChannels, (int)reader->lengthInSamples);
-    if (!reader->read(&next, 0, next.getNumSamples(), 0, true, true))
-        return "WAV decoding failed";
+    if (!reader || reader->lengthInSamples < 2 || reader->numChannels < 1 || reader->numChannels > 2 ||
+        !std::isfinite(reader->sampleRate) || reader->sampleRate < 8000 || reader->sampleRate > 192000 ||
+        reader->lengthInSamples > reader->sampleRate * 86400)
+        return "Use mono/stereo WAV at 8-192 kHz, up to 24 hours";
+    auto next = std::make_unique<WavStream>(std::move(reader));
     if (recorder.active.load())
         return "Stop recording before changing track";
     const bool was = transportRunning();
     if (was)
         suspendOutput();
     playing = false;
+    auto retired = std::move(track);
     track = std::move(next);
-    trackRate = reader->sampleRate;
+    trackRate = track->sampleRate;
     position = 0;
     seconds = 0;
-    duration = track.getNumSamples() / trackRate;
+    seek = -1;
+    duration = track->length / trackRate;
     trackName = file.getFileName();
     if (was)
         resumeOutput();
+    retired.reset(); // Join/retire the old reader after live audio has resumed.
     return {};
 }
 juce::String AudioEngine::record(const juce::File& file, bool stems)
@@ -459,6 +465,10 @@ juce::String AudioEngine::diagnostics() const
          "; fault: " + juce::String(fault.load() ? "yes" : "no") +
          "\nRound-trip latency: not inferred from buffers. Zero-lookahead sample-peak limiter, not "
          "true-peak.\nBrowser audio is NOT included in recording.";
+    if (track)
+        s += "\nStreaming WAV: 8 x 1024 queued source frames; music wait blocks: " +
+             juce::String(track->waitBlocks.load()) + "; read error: " +
+             juce::String(track->failed.load() ? "yes" : "no");
     return s;
 }
 } // namespace canto

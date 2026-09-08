@@ -60,6 +60,71 @@ inline int runOffline(const juce::String& args)
         }
         return destination.replaceWithText(report) ? resultCode : 4;
     }
+    if (tokens[0] == "--test-playback" && tokens.size() == 3)
+    {
+        engine.prepareOffline(48000);
+        engine.params.monitor = false;
+        const auto error = engine.loadTrack(File::getCurrentWorkingDirectory().getChildFile(tokens[1]));
+        if (error.isNotEmpty() || engine.duration < 0.5 || engine.duration > 10)
+            return 19; // This command requires a short, non-silent synthetic fixture.
+        AudioBuffer<float> capture(2, 256), output(2, 256);
+        capture.clear();
+        const auto playbackRecording = destination.withFileExtension("wav");
+        if (engine.recorder.start(playbackRecording, 48000, false).isNotEmpty())
+            return 25;
+        float peak = 0;
+        auto tick = [&]
+        {
+            engine.render(capture.getArrayOfReadPointers(), 2, nullptr, 0, 256, true);
+            engine.render(nullptr, 0, output.getArrayOfWritePointers(), 2, 256, false);
+            peak = std::max(peak, output.getMagnitude(0, 256));
+            Thread::sleep(1); // Test driver only, never inside render().
+        };
+        engine.playing = true;
+        for (int i = 0; i < 1000 && engine.seconds < 0.3; ++i)
+            tick();
+        if (engine.seconds < 0.3 || peak < 0.001 || peak > 0.951)
+            return 20;
+        engine.playing = false;
+        const double pausedPosition = engine.seconds.load();
+        for (int i = 0; i < 4; ++i)
+            tick();
+        if (engine.seconds != pausedPosition || output.getMagnitude(0, 256) != 0)
+            return 21;
+        engine.seek = 0.1;
+        engine.playing = true;
+        tick();
+        if (engine.seconds < 0.1 || engine.seconds > 0.1 + 256.0 / 48000 + 1.e-6)
+            return 22;
+        for (int i = 0; i < 1000 && engine.seconds < 0.2; ++i)
+            tick();
+        if (engine.seconds < 0.2)
+            return 23;
+        engine.seek = engine.duration - 0.05;
+        for (int i = 0; i < 1000 && engine.playing.load(); ++i)
+            tick();
+        if (engine.playing || engine.trackReadFailed() || engine.seconds < engine.duration - 0.001)
+            return 24;
+        engine.recorder.stop();
+        auto recordedStream = playbackRecording.createInputStream();
+        if (!recordedStream || engine.recorder.failed.load())
+            return 26;
+        WavAudioFormat recordedFormat;
+        std::unique_ptr<AudioFormatReader> recorded(recordedFormat.createReaderFor(recordedStream.release(), true));
+        if (!recorded || recorded->numChannels != 2 || recorded->lengthInSamples != int64(engine.recorder.frames.load()))
+            return 26;
+        float recordedPeak = 0;
+        for (int64 at = 0; at < recorded->lengthInSamples; at += 256)
+        {
+            output.clear();
+            if (!recorded->read(&output, 0, int(std::min<int64>(256, recorded->lengthInSamples - at)), at, true, true))
+                return 26;
+            recordedPeak = std::max(recordedPeak, output.getMagnitude(0, 256));
+        }
+        if (recordedPeak < 0.001 || recordedPeak > 0.951)
+            return 27;
+        return destination.replaceWithText("PASS: streamed WAV through actual engine; nonzero mix and finalized backing-only recording, pause silence/position, backward/forward seek, end-of-track stop. No devices opened.\n" + engine.diagnostics()) ? 0 : 4;
+    }
     if (tokens[0] != "--render" || tokens.size() != 3)
         return 2;
     const File source = File::getCurrentWorkingDirectory().getChildFile(tokens[1]);

@@ -5,8 +5,12 @@ New-Item -ItemType Directory -Path $evidencePath | Out-Null
 $exe = Join-Path $repoPath 'build/CantoDeck_artefacts/Release/CantoDeck.exe'
 & "$repoPath/build/Release/core_tests.exe"
 if ($LASTEXITCODE) { throw 'Core tests failed' }
+& "$repoPath/build/Release/stream_tests.exe"
+if ($LASTEXITCODE) { throw 'Streaming tests failed' }
 & "$repoPath/build/Release/core_tests.exe" --fixture "$evidencePath/input.wav"
 if ($LASTEXITCODE) { throw 'Fixture generation failed' }
+$process = Start-Process -FilePath $exe -ArgumentList @('--test-playback', ('"' + "$evidencePath/input.wav" + '"'), ('"' + "$evidencePath/playback.txt" + '"')) -PassThru -Wait -WindowStyle Hidden
+if ($process.ExitCode) { throw "Streaming engine playback failed: $($process.ExitCode)" }
 $process = Start-Process -FilePath $exe -ArgumentList @('--render', ('"' + "$evidencePath/input.wav" + '"'), ('"' + "$evidencePath/render.wav" + '"')) -PassThru -Wait -WindowStyle Hidden
 if ($process.ExitCode) { throw "Offline render failed: $($process.ExitCode)" }
 foreach ($name in @('render.wav','render-dry.wav','render-wet.wav')) {

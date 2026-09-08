@@ -2,6 +2,7 @@
 #include "Core.h"
 #include "audio/AudioBackend.h"
 #include "audio/LatencyProbe.h"
+#include "audio/WavStream.h"
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <thread>
 
@@ -64,7 +65,7 @@ class AudioEngine : private juce::AudioIODeviceType::Listener
     std::vector<EndpointDescription> endpoints;
     VocalDSP dsp;
     SamplePeakLimiter limiter;
-    juce::AudioBuffer<float> track;
+    std::unique_ptr<WavStream> track;
     double trackRate = 48000, position = 0, rate = 48000, expectedInputRate = 0;
     float monitorGain = 0, masterGain = 0, musicGain = 0;
     double testPhase = 0;
@@ -110,6 +111,7 @@ class AudioEngine : private juce::AudioIODeviceType::Listener
     }
     juce::String diagnostics() const;
     juce::String loadTrack(const juce::File&);
+    bool trackReadFailed() const { return track && track->failed.load(); }
     juce::String record(const juce::File&, bool);
     void stopRecording();
     bool startLatencyMeasurement()

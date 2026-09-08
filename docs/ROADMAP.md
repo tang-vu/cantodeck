@@ -8,7 +8,7 @@ This is a development preview. The owner's external-speaker setup has unacceptab
 2. Measure microphone-to-output round-trip latency on a wired setup, then tune the backend, clock bridge and buffering against measured results and underruns.
 3. Evaluate vocal transparency and the effects chain. Verify expander/compressor thresholds, gain staging, room/echo quality and bypass behavior using reproducible fixtures plus listening tests.
 4. Complete the hardware matrix and a 30-minute soak, including USB microphone, separate output, disconnect/reconnect and recording failure cases.
-5. Validate the newly implemented stable device identifiers and three-band parametric EQ on hardware. Finish streaming WAV decode, session completeness, localization/accessibility and release packaging validation.
+5. Validate stable device identifiers, three-band parametric EQ and streaming WAV playback on hardware. Finish session completeness, localization/accessibility and release packaging validation.
 
 ## After the core audio gates pass
 

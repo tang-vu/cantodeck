@@ -946,6 +946,9 @@ class Console final : public Component, private Timer
         if (engine.recorder.failed.load())
             notify(tr("LỖI THU: hàng đợi / ghi đĩa / giới hạn 3 giờ. Nhấn Dừng thu.",
                       "RECORD ERROR: queue / disk / 3-hour limit. Press Stop recording."));
+        if (engine.trackReadFailed())
+            notify(tr("Lỗi đọc nhạc WAV. Nhạc đã dừng; thử mở lại file. Mic không tự bật lại.",
+                      "WAV read failed. Music stopped; reopen the file. Monitoring is not auto-enabled."));
     }
 };
 class CantoDeckApp final : public JUCEApplication
