@@ -24,6 +24,7 @@ class Console final : public Component, private Timer
     uint32 measurementStarted = 0;
     File pendingTrack;
     bool vi = true, showAdvanced = false;
+    const bool persistSession;
     String message;
     String savedInputId, savedOutputId;
     struct Lyric
@@ -177,6 +178,8 @@ class Console final : public Component, private Timer
     }
     void save()
     {
+        if (!persistSession)
+            return;
         settings.getParentDirectory().createDirectory();
         if (settings.existsAsFile() && JSON::parse(settings).isObject())
             settings.copyFileTo(settings.getSiblingFile("session.last-good.json"));
@@ -257,7 +260,7 @@ class Console final : public Component, private Timer
     }
 
   public:
-    Console()
+    explicit Console(bool persist = true) : persistSession(persist)
     {
         theme.setColour(ResizableWindow::backgroundColourId, Colour(0xff141922));
         theme.setColour(Slider::thumbColourId, Colour(0xff49cbb0));
@@ -529,7 +532,7 @@ class Console final : public Component, private Timer
                    });
         };
         scan();
-        if (settings.existsAsFile())
+        if (persistSession && settings.existsAsFile())
         {
             auto v = JSON::parse(settings);
             if (!v.isObject())
@@ -765,10 +768,10 @@ class CantoDeckApp final : public JUCEApplication
     class Window final : public DocumentWindow
     {
       public:
-        Window() : DocumentWindow("CantoDeck", Colour(0xff141922), allButtons)
+        explicit Window(bool persist = true) : DocumentWindow("CantoDeck", Colour(0xff141922), allButtons)
         {
             setUsingNativeTitleBar(true);
-            setContentOwned(new Console, true);
+            setContentOwned(new Console(persist), true);
             setResizable(true, true);
             setResizeLimits(1000, 780, 2400, 1600);
             centreWithSize(getWidth(), getHeight());
@@ -785,7 +788,7 @@ class CantoDeckApp final : public JUCEApplication
     {
         if (args.startsWith("--ui-smoke "))
         {
-            window = std::make_unique<Window>();
+            window = std::make_unique<Window>(false);
             auto path = args.fromFirstOccurrenceOf("--ui-smoke ", false, false).trim().unquoted();
             Timer::callAfterDelay(
                 600,
@@ -807,12 +810,14 @@ class CantoDeckApp final : public JUCEApplication
                     stream.reset();
                     static_cast<Console*>(content)->smokeAdvanced();
                     auto advancedFile = f.getSiblingFile(f.getFileNameWithoutExtension() + "-advanced.png");
-                    if (!advancedFile.exists())
+                    if (advancedFile.exists())
+                        setApplicationReturnValue(3);
+                    else
                     {
                         auto advancedStream = advancedFile.createOutputStream();
-                        if (advancedStream)
-                            png.writeImageToStream(
-                                content->createComponentSnapshot(content->getLocalBounds()), *advancedStream);
+                        if (!advancedStream || !png.writeImageToStream(
+                                content->createComponentSnapshot(content->getLocalBounds()), *advancedStream))
+                            setApplicationReturnValue(4);
                     }
                     quit();
                 });
