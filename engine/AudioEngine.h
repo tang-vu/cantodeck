@@ -77,6 +77,8 @@ class AudioEngine : private juce::AudioIODeviceType::Listener
     double testPhase = 0;
     int testRemaining = 0;
     bool lowLatencyMode = false;
+    LatencyContinuity measurementStart;
+    LatencyContinuity latencyContinuity() const;
     void prepareNative(const BackendFormat&);
     void suspendOutput();
     void resumeOutput();
@@ -126,7 +128,12 @@ class AudioEngine : private juce::AudioIODeviceType::Listener
             return false;
         params.monitor = false;
         playing = false;
+        measurementStart = latencyContinuity();
         return latencyProbe.begin();
+    }
+    LatencyResult finishLatencyMeasurement(LatencyResult result) const
+    {
+        return validateLatencyContinuity(std::move(result), measurementStart, latencyContinuity(), connected());
     }
     void prepareOffline(double sr)
     {

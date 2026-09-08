@@ -16,6 +16,21 @@ struct LatencyResult
     bool inverted = false;
     std::string reason;
 };
+// Control-thread snapshots. Counts are cumulative; existing errors before the
+// probe do not invalidate it, but any changed count (including reset) does.
+struct LatencyContinuity
+{
+    uint64_t underruns = 0, overruns = 0, resyncs = 0;
+    uint64_t captureDiscontinuities = 0, timestampErrors = 0, emptyOutputObservations = 0;
+    bool operator==(const LatencyContinuity&) const = default;
+};
+inline LatencyResult validateLatencyContinuity(LatencyResult result, const LatencyContinuity& before,
+                                              const LatencyContinuity& after, bool connected)
+{
+    if (!connected || before != after)
+        return {false, 0, 0, 0, false, "Audio stream interrupted; repeat measurement"};
+    return result;
+}
 // User-triggered acoustic/electrical loop measurement. Output and returned input
 // are indexed by the output processing clock. No microphone samples leave RAM.
 class LatencyProbe

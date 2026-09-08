@@ -847,7 +847,7 @@ class Console final : public Component, private Timer
         {
             try
             {
-                const auto result = latencyAnalysis.get();
+                const auto result = engine.finishLatencyMeasurement(latencyAnalysis.get());
                 notify(result.valid
                            ? tr("Vòng loa → mic: ", "Speaker → mic loop: ") + String(result.milliseconds, 1) +
                                  " ms; correlation " + String(result.correlation, 2) +
@@ -872,7 +872,8 @@ class Console final : public Component, private Timer
                       "No capture data for measurement. Check devices."));
         }
         const bool measuring = engine.latencyProbe.busy() || latencyAnalysis.valid();
-        for (auto* c : std::initializer_list<Component*>{&connect, &refresh, &load, &queue, &play, &record})
+        for (auto* c : std::initializer_list<Component*>{&connect, &refresh, &load, &queue, &play, &record,
+                                                        &channel, &importButton})
             c->setEnabled(!measuring && !trackLoad.valid());
         monitor.setEnabled(!measuring);
         test.setEnabled(!measuring);

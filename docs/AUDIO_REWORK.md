@@ -52,6 +52,22 @@ The goal remains the full project specification and comfortable live singing thr
 
 ## Remaining acceptance work
 
+Measurement continuity gate (2026-09-08): the UI validates analysis against
+control-thread snapshots of FIFO under/overruns and resynchronizations, plus native
+capture discontinuities, timestamp errors and empty-output observations. A changed
+counter or disconnected stream invalidates the result even with strong correlation.
+Historical unchanged counts do not invalidate a fresh measurement. The interval is
+conservative: from requesting capture until the UI receives the analysed result,
+so an interruption just after capture may also require a repeat. No extra callback
+work is added. JUCE does not expose the native-only counters here; unchanged counts
+are not proof of perfect hardware continuity. Channel selection and preset import
+are disabled during measurement to avoid changing the input path mid-probe.
+Deterministic tests cover each changed counter, counter reset, disconnect, historical
+counts, and preservation of invalid results. The pre-final-UI build passed CTest
+3/3 and full verification in `build/evidence-20260908-220950`. Fresh Windows endpoint
+enumeration still showed Realtek/Steam endpoints, not DGM20. Physical RTT remains
+unmeasured.
+
 Analysis cancellation follow-up (2026-09-08): a cancelled latency-analysis worker
 can no longer overwrite cancellation with completion or publish a valid result.
 An independent worker-active guard prevents restarting into buffers still being

@@ -418,6 +418,21 @@ void AudioEngine::stopRecording()
     if (was)
         resumeOutput();
 }
+LatencyContinuity AudioEngine::latencyContinuity() const
+{
+    LatencyContinuity counters;
+    counters.underruns = bridge.underruns.load();
+    counters.overruns = bridge.overruns.load();
+    counters.resyncs = bridge.resyncs.load();
+    if (native)
+    {
+        const auto backend = native->counters();
+        counters.captureDiscontinuities = backend.captureDiscontinuities;
+        counters.timestampErrors = backend.captureTimestampErrors;
+        counters.emptyOutputObservations = backend.zeroPaddingEvents;
+    }
+    return counters;
+}
 juce::String AudioEngine::diagnostics() const
 {
     juce::String s = "CantoDeck 0.1.0 | JUCE 8.0.15 | " + juce::SystemStats::getOperatingSystemName() +

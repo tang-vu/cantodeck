@@ -51,6 +51,32 @@ int main(int argc, char** argv)
         }
         canto::Ring<int, 4> q;
         {
+            const canto::LatencyResult correlated{true, 12.5, 0.9, 0.1, false, {}};
+            const canto::LatencyContinuity baseline{4, 3, 2, 1, 5, 6};
+            const auto unchanged = canto::validateLatencyContinuity(correlated, baseline, baseline, true);
+            check(unchanged.valid && unchanged.milliseconds == 12.5,
+                  "unchanged historical errors do not invalidate a new measurement");
+            for (auto member : {&canto::LatencyContinuity::underruns, &canto::LatencyContinuity::overruns,
+                                &canto::LatencyContinuity::resyncs,
+                                &canto::LatencyContinuity::captureDiscontinuities,
+                                &canto::LatencyContinuity::timestampErrors,
+                                &canto::LatencyContinuity::emptyOutputObservations})
+            {
+                auto changed = baseline;
+                ++(changed.*member);
+                const auto interrupted = canto::validateLatencyContinuity(correlated, baseline, changed, true);
+                check(!interrupted.valid && interrupted.milliseconds == 0,
+                      "stream anomaly invalidates even a strongly correlated measurement");
+            }
+            check(!canto::validateLatencyContinuity(correlated, baseline, {}, true).valid,
+                  "counter reset invalidates measurement");
+            check(!canto::validateLatencyContinuity(correlated, baseline, baseline, false).valid,
+                  "disconnect invalidates measurement without counter changes");
+            const canto::LatencyResult invalid{false, 0, 0, 0, false, "No return"};
+            check(!canto::validateLatencyContinuity(invalid, baseline, baseline, true).valid,
+                  "continuity alone never upgrades an invalid measurement");
+        }
+        {
             canto::MonitoringStopPolicy policy;
             check(policy.mustMute(true) && policy.mustMute(false), "unexpected endpoint stops always mute");
             {
