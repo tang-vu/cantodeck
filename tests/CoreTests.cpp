@@ -75,6 +75,46 @@ int main(int argc, char** argv)
         }
         for (double sr : {44100., 48000.})
         {
+            {
+                canto::RoomDiffusion diffusion;
+                diffusion.prepare(sr);
+                double energy = 0, lateEnergy = 0;
+                int nonzero = 0;
+                for (int i = 0; i < int(sr); ++i)
+                {
+                    const float value = diffusion.process(i == 0 ? 1.f : 0.f);
+                    check(std::isfinite(value), "room diffusion impulse stays finite");
+                    energy += double(value) * value;
+                    if (i > sr / 2)
+                        lateEnergy += double(value) * value;
+                    if (std::abs(value) > 1.e-5f)
+                        ++nonzero;
+                }
+                check(std::abs(energy - 1) < 1.e-5, "room diffusion preserves impulse energy");
+                check(nonzero > 500 && lateEnergy < 1.e-12,
+                      "room diffusion spreads reflections with bounded decay");
+                diffusion.prepare(sr);
+                check(diffusion.process(0) == 0, "reprepare clears all diffusion tails");
+                check(std::isfinite(diffusion.process(std::numeric_limits<float>::infinity())),
+                      "room diffusion rejects nonfinite input");
+                for (double frequency : {100., 1000., 10000.})
+                {
+                    diffusion.prepare(sr);
+                    double inputEnergy = 0, outputEnergy = 0;
+                    for (int i = 0; i < int(sr); ++i)
+                    {
+                        const float input = float(0.1 * std::sin(2 * 3.141592653589793 * frequency * i / sr));
+                        const float output = diffusion.process(input);
+                        if (i > sr / 2)
+                        {
+                            inputEnergy += double(input) * input;
+                            outputEnergy += double(output) * output;
+                        }
+                    }
+                    check(std::abs(10 * std::log10(outputEnergy / inputEnergy)) < 0.03,
+                          "room diffusion does not boost or cut tested steady-state frequencies");
+                }
+            }
             auto eqResponse = [&](float frequency, float gain, float q, int activeBands, double testFrequency)
             {
                 canto::ParametricEQ filter;
@@ -239,6 +279,36 @@ int main(int argc, char** argv)
                           "transparent path preserves dry waveform without sample delay");
             }
             canto::Parameters p;
+            {
+                canto::VocalDSP dryVoice, roomVoice;
+                dryVoice.prepare(sr);
+                roomVoice.prepare(sr);
+                canto::Parameters dryParameters, roomParameters;
+                for (auto* parameters : {&dryParameters, &roomParameters})
+                {
+                    parameters->gate = false;
+                    parameters->compressor = false;
+                    parameters->echo = 0;
+                    parameters->mic = 1;
+                }
+                dryParameters.reverb = 0;
+                roomParameters.reverb = 0.5f;
+                const int onset = 4096, firstRoomSample = int(sr * 0.0297) + 1;
+                double earlyTail = 0, lateTail = 0;
+                for (int i = 0; i < onset + int(sr * 3); ++i)
+                {
+                    const float input = i == onset ? 0.5f : 0.f;
+                    const float difference = roomVoice.process(input, roomParameters) - dryVoice.process(input, dryParameters);
+                    if (i < onset + firstRoomSample)
+                        check(std::abs(difference) < 1.e-7f, "room diffusion does not alter direct vocal onset");
+                    if (i > onset && i < onset + sr)
+                        earlyTail += double(difference) * difference;
+                    if (i > onset + 2 * sr)
+                        lateTail += double(difference) * difference;
+                }
+                check(earlyTail > 0.001 && lateTail < earlyTail * 1.e-6,
+                      "integrated diffused room produces a decaying tail");
+            }
             {
                 canto::Parameters flatParameters, boostedParameters;
                 for (auto* parameters : {&flatParameters, &boostedParameters})

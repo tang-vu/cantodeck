@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <vector>
 #include "audio/ParametricEQ.h"
+#include "audio/RoomDiffusion.h"
 
 namespace canto
 {
@@ -65,6 +66,7 @@ struct Parameters
 class VocalDSP
 {
     ParametricEQ parametric;
+    RoomDiffusion diffusion;
     std::vector<float> delay;
     std::array<std::vector<float>, 4> room;
     std::array<size_t, 4> roomPos{};
@@ -83,6 +85,7 @@ class VocalDSP
     {
         rate = sr;
         parametric.prepare(sr);
+        diffusion.prepare(sr);
         delay.assign(size_t(sr * 0.8) + 1, 0);
         const double times[] = {0.0297, 0.0371, 0.0411, 0.0437};
         for (size_t i = 0; i < 4; ++i)
@@ -165,6 +168,7 @@ class VocalDSP
             roomPos[j] = (roomPos[j] + 1) % room[j].size();
             reverberation += r * 0.25f;
         }
+        reverberation = diffusion.process(reverberation);
         // Linear (not equal-power) crossfade: both paths contain correlated voice.
         // Keep their states advancing, so bypass changes do not revive frozen tails.
         const float requestedMix = p.transparent.load() ? 1.f : 0.f;
