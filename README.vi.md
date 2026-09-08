@@ -4,6 +4,8 @@
 
 ## Mở ứng dụng
 
+Danh sách tối đa 128 bài WAV và độ lệch lời được lưu trong phiên làm việc trên máy. Mở lại ứng dụng chỉ khôi phục danh sách: bạn chọn bài để tải, không tự phát nhạc hay bật mic. **Xóa DS** không xóa file và không dừng bài đang tải/phát. Đường dẫn danh sách không được đưa vào preset giọng xuất ra; file session vẫn chứa đường dẫn cục bộ, nên kiểm tra trước khi chia sẻ.
+
 Chạy `CantoDeck.exe` trong thư mục portable, hoặc từ mã nguồn:
 
 ```powershell

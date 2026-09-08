@@ -36,4 +36,12 @@ foreach ($name in @('render.wav','render-dry.wav','render-wet.wav')) {
 }
 $process = Start-Process -FilePath $exe -ArgumentList @('--diagnostics', ('"' + "$evidencePath/diagnostics.txt" + '"')) -PassThru -Wait -WindowStyle Hidden
 if ($process.ExitCode) { throw 'Diagnostics failed' }
+$process = Start-Process -FilePath $exe -ArgumentList @('--ui-smoke', ('"' + "$evidencePath/ui.png" + '"')) -PassThru -Wait -WindowStyle Hidden
+if ($process.ExitCode) { throw "UI/session/preset smoke failed: $($process.ExitCode)" }
+foreach ($name in @('ui.png', 'ui-advanced.png', 'ui-eq.png')) {
+    if (!(Test-Path -LiteralPath "$evidencePath/$name") -or (Get-Item -LiteralPath "$evidencePath/$name").Length -eq 0) {
+        throw "UI smoke did not produce $name"
+    }
+}
+Write-Output 'Verified UI snapshots and session/preset round-trip (no audio streams, no session writes)'
 Write-Output "Verified offline graph, mix/dry/wet WAV finalization and injected-fault silence: $evidencePath"

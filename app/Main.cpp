@@ -11,7 +11,7 @@ class Console final : public Component, private Timer
     LookAndFeel_V4 theme;
     ComboBox input, output, preset, channel, sampleRate, buffer, queue;
     TextButton connect, refresh, monitor, mute, load, play, record, lyricsButton, advanced, language, test,
-        importButton, exportButton, diagnosticButton, fullLyrics, measureLatency, eqEditor;
+        importButton, exportButton, diagnosticButton, fullLyrics, measureLatency, eqEditor, clearQueue;
     ToggleButton stems, gate, compressor, eq, effects, musicMute, lowLatency, nativeBackend, transparent;
     Slider mic, boost, music, master, echo, reverb, delay, feedback, tone, threshold, position, offset;
     Label title, status, meters, lyrics, trackLabel;
@@ -101,7 +101,7 @@ class Console final : public Component, private Timer
                                    }
                                });
     }
-    var state()
+    var state(bool session = false)
     {
         auto* o = new DynamicObject();
         o->setProperty("version", 1);
@@ -138,6 +138,14 @@ class Console final : public Component, private Timer
             bands.add(var(values));
         }
         o->setProperty("eqBands", var(bands));
+        if (session)
+        {
+            Array<var> files;
+            for (const auto& file : tracks)
+                files.add(file.getFullPathName());
+            o->setProperty("queue", var(files));
+            o->setProperty("lyricsOffsetSeconds", offset.getValue());
+        }
         return var(o);
     }
     bool restore(const var& v, bool devices)
@@ -204,6 +212,30 @@ class Console final : public Component, private Timer
                 buffer.setSelectedId(jlimit(1, 4, int(v["bufferId"])), dontSendNotification);
             if (v.hasProperty("channelId"))
                 channel.setSelectedId(jlimit(1, 3, int(v["channelId"])), sendNotificationSync);
+            if (auto* files = v["queue"].getArray())
+            {
+                tracks.clear();
+                queue.clear(dontSendNotification);
+                for (int i = 0; i < std::min(128, files->size()); ++i)
+                {
+                    const auto& value = (*files)[i];
+                    if (!value.isString())
+                        continue;
+                    const auto path = value.toString();
+                    if (path.length() > 32767 || !File::isAbsolutePath(path))
+                        continue;
+                    File file(path);
+                    if (!file.hasFileExtension("wav"))
+                        continue;
+                    tracks.push_back(file);
+                    queue.addItem(file.getFileName(), int(tracks.size()));
+                }
+                // Descriptors only: do not stat/open media, select, or play at startup.
+                queue.setSelectedId(0, dontSendNotification);
+            }
+            const auto lyricOffset = v["lyricsOffsetSeconds"];
+            if ((lyricOffset.isDouble() || lyricOffset.isInt()) && std::isfinite(double(lyricOffset)))
+                offset.setValue(jlimit(-20., 20., double(lyricOffset)), dontSendNotification);
         }
         return true;
     }
@@ -215,7 +247,7 @@ class Console final : public Component, private Timer
         if (settings.existsAsFile() && JSON::parse(settings).isObject())
             settings.copyFileTo(settings.getSiblingFile("session.last-good.json"));
         TemporaryFile temp(settings);
-        if (temp.getFile().replaceWithText(JSON::toString(state())))
+        if (temp.getFile().replaceWithText(JSON::toString(state(true))))
             temp.overwriteTargetFileWithTemporary();
     }
     void choose(const String& titleText, const String& wildcard, int flags, std::function<void(File)> action)
@@ -261,6 +293,8 @@ class Console final : public Component, private Timer
     }
     void localize()
     {
+        clearQueue.setButtonText(tr("Xóa DS", "Clear queue"));
+        queue.setTextWhenNothingSelected(tr("Chọn bài trong danh sách", "Choose a queued song"));
         title.setText("CantoDeck  /  WINDOWS ALPHA", dontSendNotification);
         connect.setButtonText(tr("Kết nối", "Connect"));
         refresh.setButtonText(tr("Quét thiết bị", "Refresh devices"));
@@ -324,6 +358,14 @@ class Console final : public Component, private Timer
                                "judge monitoring latency and transparency.");
         addAndMakeVisible(measureLatency);
         addAndMakeVisible(eqEditor);
+        addAndMakeVisible(clearQueue);
+        clearQueue.setButtonText("Clear queue");
+        clearQueue.setTooltip("Clear the song list only. Does not delete files or stop the current song.");
+        clearQueue.onClick = [this]
+        {
+            tracks.clear();
+            queue.clear(dontSendNotification);
+        };
         eqEditor.setButtonText("EQ 3 bands");
         eqEditor.onClick = [this]
         {
@@ -450,6 +492,12 @@ class Console final : public Component, private Timer
             choose("Open WAV", "*.wav", FileBrowserComponent::openMode | FileBrowserComponent::canSelectFiles,
                    [this](File f)
                    {
+                       if (tracks.size() >= 128)
+                       {
+                           notify(tr("Danh sách tối đa 128 bài. Xóa danh sách trước khi thêm.",
+                                     "Queue limit is 128 tracks. Clear the queue before adding more."));
+                           return;
+                       }
                        tracks.push_back(f);
                        queue.addItem(f.getFileName(), int(tracks.size()));
                        queue.setSelectedId(int(tracks.size()), dontSendNotification);
@@ -606,6 +654,33 @@ class Console final : public Component, private Timer
     }
     bool smokeEq(const File& file)
     {
+        const auto originalSession = state(true);
+        const auto syntheticPath = File::getCurrentWorkingDirectory().getChildFile(
+            String::fromUTF8("build/Bài hát thử không tồn tại.wav"));
+        tracks = {syntheticPath, syntheticPath.getSiblingFile("Second synthetic song.wav")};
+        offset.setValue(1.25, dontSendNotification);
+        const auto session = JSON::parse(JSON::toString(state(true)));
+        if (state().hasProperty("queue") || state().hasProperty("lyricsOffsetSeconds"))
+            return false; // Preset export must not disclose the local playlist.
+        tracks.clear();
+        offset.setValue(0, dontSendNotification);
+        if (!restore(session, true) || tracks.size() != 2 || tracks[0] != syntheticPath ||
+            offset.getValue() != 1.25 || queue.getSelectedId() != 0 || engine.playing.load() ||
+            engine.params.monitor.load() || trackLoad.valid())
+            return false;
+        auto malformed = JSON::parse(JSON::toString(session));
+        Array<var> entries;
+        entries.add(123);
+        entries.add("relative.wav");
+        entries.add(syntheticPath.withFileExtension("mp3").getFullPathName());
+        for (int i = 0; i < 200; ++i)
+            entries.add(syntheticPath.getFullPathName());
+        malformed.getDynamicObject()->setProperty("queue", var(entries));
+        malformed.getDynamicObject()->setProperty("lyricsOffsetSeconds", 999);
+        if (!restore(malformed, true) || tracks.size() != 125 || offset.getValue() != 20)
+            return false;
+        if (!restore(originalSession, true))
+            return false;
         engine.params.eqBands[1].frequency = 2300;
         engine.params.eqBands[1].gainDb = -3;
         engine.params.eqBands[1].q = 1.2f;
@@ -671,8 +746,9 @@ class Console final : public Component, private Timer
         record.setBounds(row.removeFromLeft(145).reduced(3));
         stems.setBounds(row);
         row = r.removeFromTop(30);
-        trackLabel.setBounds(row.removeFromLeft(r.getWidth() / 2));
+        trackLabel.setBounds(row.removeFromLeft(r.getWidth() / 3));
         queue.setBounds(row.removeFromLeft(r.getWidth() / 3));
+        clearQueue.setBounds(row.removeFromLeft(100).reduced(3));
         fullLyrics.setBounds(row);
         position.setBounds(r.removeFromTop(30));
         for (auto* c : std::initializer_list<Component*>{
