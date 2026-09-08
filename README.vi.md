@@ -6,6 +6,8 @@
 
 Danh sách tối đa 128 bài WAV và độ lệch lời được lưu trong phiên làm việc trên máy. Mở lại ứng dụng chỉ khôi phục danh sách: bạn chọn bài để tải, không tự phát nhạc hay bật mic. **Xóa DS** không xóa file và không dừng bài đang tải/phát. Đường dẫn danh sách không được đưa vào preset giọng xuất ra; file session vẫn chứa đường dẫn cục bộ, nên kiểm tra trước khi chia sẻ.
 
+Lời TXT có thể cuộn trong khung chính và cửa sổ lời; dòng chứa dấu ngoặc vuông trong TXT được giữ nguyên. File LRC/TXT tối đa 256 KiB. LRC hỗ trợ timestamp phút:giây với phần thập phân đến ba chữ số; dùng thanh độ lệch lời để chỉnh đồng bộ (chưa xử lý thẻ offset trong file).
+
 Chạy `CantoDeck.exe` trong thư mục portable, hoặc từ mã nguồn:
 
 ```powershell

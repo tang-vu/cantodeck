@@ -2,6 +2,7 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 #include "Offline.h"
 #include "EqPanel.h"
+#include "LyricText.h"
 #include <future>
 
 using namespace juce;
@@ -14,13 +15,14 @@ class Console final : public Component, private Timer
         importButton, exportButton, diagnosticButton, fullLyrics, measureLatency, eqEditor, clearQueue;
     ToggleButton stems, gate, compressor, eq, effects, musicMute, lowLatency, nativeBackend, transparent;
     Slider mic, boost, music, master, echo, reverb, delay, feedback, tone, threshold, position, offset;
-    Label title, status, meters, lyrics, trackLabel;
+    Label title, status, meters, trackLabel;
+    LyricText lyrics;
     TextEditor details;
     std::unique_ptr<FileChooser> chooser;
     std::vector<File> tracks;
     std::unique_ptr<DocumentWindow> lyricWindow;
     std::unique_ptr<EqWindow> eqWindow;
-    Label* bigLyric = nullptr;
+    LyricText* bigLyric = nullptr;
     std::future<String> trackLoad;
     std::future<canto::LatencyResult> latencyAnalysis;
     uint32 measurementStarted = 0;
@@ -35,6 +37,7 @@ class Console final : public Component, private Timer
         String text;
     };
     std::vector<Lyric> lines;
+    String untimedLyrics;
     File settings =
         File::getSpecialLocation(File::userApplicationDataDirectory).getChildFile("CantoDeck/session.json");
     String tr(const char* a, const char* b) const { return String::fromUTF8(vi ? a : b); }
@@ -262,11 +265,30 @@ class Console final : public Component, private Timer
     }
     void readLyrics(const File& file)
     {
+        if (!file.existsAsFile() || file.getSize() > 256 * 1024)
+        {
+            notify(tr("Không đọc được lời: cần file LRC/TXT tối đa 256 KiB.",
+                      "Cannot read lyrics: LRC/TXT must be at most 256 KiB."));
+            return;
+        }
+        auto stream = file.createInputStream();
+        MemoryBlock bytes;
+        if (!stream || stream->readIntoMemoryBlock(bytes, 256 * 1024 + 1) > 256 * 1024)
+        {
+            notify(tr("Không đọc được file lời hoặc file vượt giới hạn.",
+                      "Cannot read lyrics or file exceeds the size limit."));
+            return;
+        }
         lines.clear();
         StringArray text;
-        text.addLines(file.loadFileAsString());
+        text.addLines(String::createStringFromData(bytes.getData(), int(bytes.getSize())));
         for (auto line : text)
         {
+            if (file.hasFileExtension("txt"))
+            {
+                lines.push_back({-1, line});
+                continue;
+            }
             bool tagged = false;
             std::vector<double> times;
             while (line.startsWithChar('[') && line.containsChar(']'))
@@ -276,10 +298,9 @@ class Console final : public Component, private Timer
                 line = line.fromFirstOccurrenceOf("]", false, false);
                 if (tag.containsChar(':') && CharacterFunctions::isDigit(tag[0]))
                 {
-                    auto parts = StringArray::fromTokens(tag, ":", "");
-                    if (parts.size() == 2)
+                    if (const auto timestamp = lyricTimestamp(tag))
                     {
-                        times.push_back(parts[0].getDoubleValue() * 60 + parts[1].getDoubleValue());
+                        times.push_back(*timestamp);
                         tagged = true;
                     }
                 }
@@ -290,6 +311,11 @@ class Console final : public Component, private Timer
                 lines.push_back({-1, line});
         }
         std::stable_sort(lines.begin(), lines.end(), [](auto& a, auto& b) { return a.time < b.time; });
+        StringArray plainLines;
+        for (const auto& line : lines)
+            if (line.time < 0)
+                plainLines.add(line.text);
+        untimedLyrics = plainLines.joinIntoString("\n");
     }
     void localize()
     {
@@ -341,7 +367,6 @@ class Console final : public Component, private Timer
             addAndMakeVisible(c);
         title.setFont(Font(FontOptions(25.f, Font::bold)));
         lyrics.setFont(Font(FontOptions(25.f)));
-        lyrics.setJustificationType(Justification::centred);
         status.setColour(Label::textColourId, Colour(0xffefca80));
         details.setMultiLine(true);
         details.setReadOnly(true);
@@ -541,9 +566,14 @@ class Console final : public Component, private Timer
                 }
             };
             lyricWindow = std::make_unique<LyricsWindow>();
-            bigLyric = new Label;
+            bigLyric = new LyricText;
             bigLyric->setFont(Font(FontOptions(40.f)));
-            bigLyric->setJustificationType(Justification::centred);
+            bigLyric->windowKey = [this](const KeyPress& key)
+            {
+                if (key.getKeyCode() == KeyPress::F11Key || key.getKeyCode() == KeyPress::escapeKey)
+                    return lyricWindow->keyPressed(key);
+                return false;
+            };
             lyricWindow->setUsingNativeTitleBar(true);
             lyricWindow->setContentOwned(bigLyric, false);
             lyricWindow->setResizable(true, true);
@@ -654,6 +684,24 @@ class Console final : public Component, private Timer
     }
     bool smokeEq(const File& file)
     {
+        if (!lyricTimestamp("02:03.125") || std::abs(*lyricTimestamp("02:03.125") - 123.125) > 1.e-9)
+            return false;
+        for (const auto* invalid : {"00:60", "1:xyz", "-1:20", "1:2.3.4", "1:20.", "ar:Artist", "1:20abc"})
+            if (lyricTimestamp(invalid))
+                return false;
+        LyricText scrollTest;
+        scrollTest.setSize(300, 100);
+        String plainText;
+        for (int i = 0; i < 100; ++i)
+            plainText += String::fromUTF8("Dòng lời tiếng Việt ") + String(i) + "\n";
+        scrollTest.display(plainText);
+        scrollTest.setCaretPosition(plainText.length());
+        scrollTest.display(plainText);
+        if (scrollTest.getCaretPosition() != plainText.length() || !scrollTest.isReadOnly())
+            return false;
+        scrollTest.display("Next lyric");
+        if (scrollTest.getCaretPosition() != 0)
+            return false;
         const auto originalSession = state(true);
         const auto syntheticPath = File::getCurrentWorkingDirectory().getChildFile(
             String::fromUTF8("build/Bài hát thử không tồn tại.wav"));
@@ -844,6 +892,7 @@ class Console final : public Component, private Timer
             {
                 position.setRange(0, std::max(1.0, engine.duration), 0.01);
                 lines.clear();
+                untimedLyrics.clear();
                 auto lrc = pendingTrack.withFileExtension("lrc");
                 if (lrc.existsAsFile())
                     readLyrics(lrc);
@@ -870,27 +919,27 @@ class Console final : public Component, private Timer
                            dontSendNotification);
         if (showAdvanced)
             details.setText(engine.diagnostics(), false);
-        String lyric;
+        String lyric = untimedLyrics;
         double now = engine.seconds.load() + offset.getValue();
-        for (size_t i = 0; i < lines.size(); ++i)
+        const auto nextLine = std::upper_bound(lines.begin(), lines.end(), now,
+            [](double time, const Lyric& line) { return time < line.time; });
+        if (nextLine != lines.begin())
         {
-            if (lines[i].time < 0)
-                lyric += lines[i].text + "\n";
-            else if (lines[i].time <= now)
+            const auto& current = *std::prev(nextLine);
+            if (current.time >= 0)
             {
-                lyric = lines[i].text;
-                if (i + 1 < lines.size())
-                    lyric += "\n" + lines[i + 1].text;
+                lyric = current.text;
+                if (nextLine != lines.end())
+                    lyric += "\n" + nextLine->text;
             }
         }
-        lyrics.setText(
+        lyrics.display(
             lyric.isEmpty()
                 ? tr("Mở WAV và LRC để hát karaoke\nNhạc YouTube bên ngoài không được thu vào bản mix.",
                      "Open WAV + LRC to sing\nExternal YouTube audio is not included in recordings.")
-                : lyric,
-            dontSendNotification);
+                : lyric);
         if (bigLyric)
-            bigLyric->setText(lyrics.getText(), dontSendNotification);
+            bigLyric->display(lyrics.getText());
         if (engine.fault.load())
             notify(tr("Thiết bị lỗi / mất kết nối. Nghe mic đã tắt; chọn lại thiết bị và Kết nối.",
                       "Device lost/error. Monitoring disabled; select devices and reconnect."));
