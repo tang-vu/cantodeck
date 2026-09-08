@@ -121,6 +121,7 @@ class WavStream
             worker.join();
     }
     void beginBlock() noexcept { popBudget = 16; waited = false; }
+    size_t queuedBlocks() const noexcept { return ready.size(); }
     void seek(int64_t index) noexcept
     {
         current.count = 0;

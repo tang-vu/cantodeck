@@ -11,10 +11,110 @@ float fixture(int64_t frame, int channel)
     const float value = float(frame % 200 - 100) / 128.f;
     return channel == 0 ? value : -value * 0.5f;
 }
+struct ReaderControl
+{
+    std::atomic<bool> release{false}, fail{false}, sampling{false};
+    std::atomic<int> calls{0}, consumerReads{0};
+    const std::thread::id consumer = std::this_thread::get_id();
+};
+// Explicit synthetic fault adapter, not an actual disk or hardware benchmark.
+class ControlledReader final : public juce::AudioFormatReader
+{
+    std::shared_ptr<ReaderControl> control;
+  public:
+    explicit ControlledReader(std::shared_ptr<ReaderControl> state)
+        : AudioFormatReader(nullptr, "Synthetic fault reader"), control(std::move(state))
+    {
+        sampleRate = 48000;
+        numChannels = 2;
+        bitsPerSample = 32;
+        usesFloatingPointData = true;
+        lengthInSamples = 48000LL * 86400;
+    }
+    bool readSamples(int* const* channels, int count, int offset, juce::int64 start, int frames) override
+    {
+        ++control->calls;
+        if (control->sampling && std::this_thread::get_id() == control->consumer)
+            ++control->consumerReads;
+        if (start >= 4096)
+        {
+            while (!control->release)
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        if (control->fail)
+            return false;
+        for (int c = 0; c < count; ++c)
+            if (channels[c])
+                for (int i = 0; i < frames; ++i)
+                    reinterpret_cast<float*>(channels[c])[offset + i] = fixture(start + i, c);
+        return true;
+    }
+};
 int main()
 {
     try
     {
+        {
+            auto control = std::make_shared<ReaderControl>();
+            canto::WavStream player(std::make_unique<ControlledReader>(control));
+            struct ReleaseOnExit
+            {
+                std::shared_ptr<ReaderControl> state;
+                ~ReleaseOnExit() { state->release = true; }
+            } releaseOnExit{control}; // Release the worker before player destruction on test failure.
+            player.seek(20000);
+            player.beginBlock();
+            control->sampling = true;
+            float left = 1, right = 1;
+            for (int i = 0; i < 20; ++i)
+                check(!player.sample(20000, left, right) && left == 0 && right == 0,
+                      "stalled reader must not return stale pre-seek samples");
+            control->sampling = false;
+            check(player.waitBlocks == 1 && control->consumerReads == 0,
+                  "stream waits counted once per callback, no reader call on sample thread");
+            control->release = true;
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+            for (;;)
+            {
+                player.beginBlock();
+                if (player.sample(20000, left, right))
+                    break;
+                check(std::chrono::steady_clock::now() < deadline, "stalled source did not resume");
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            check(left == fixture(20000, 0) && right == fixture(20000, 1),
+                  "recovered seek returns exact requested source frame");
+            while (player.queuedBlocks() < 8)
+            {
+                check(std::chrono::steady_clock::now() < deadline, "read-ahead queue did not fill");
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            const auto reads = control->calls.load();
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            check(control->calls == reads && reads < 24,
+                  "read-ahead stops when bounded queue is full, regardless of declared duration");
+        }
+        {
+            auto control = std::make_shared<ReaderControl>();
+            canto::WavStream player(std::make_unique<ControlledReader>(control));
+            control->fail = true;
+            control->release = true;
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+            while (!player.failed && std::chrono::steady_clock::now() < deadline)
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            check(player.failed, "worker read failure must be latched");
+            float left = 1, right = 1;
+            check(!player.sample(0, left, right) && left == 0 && right == 0,
+                  "failed worker silences even previously cached audio");
+        }
+        {
+            auto control = std::make_shared<ReaderControl>();
+            control->fail = true;
+            bool rejected = false;
+            try { canto::WavStream player(std::make_unique<ControlledReader>(control)); }
+            catch (const std::runtime_error&) { rejected = true; }
+            check(rejected, "prefill read failure rejects construction before worker publication");
+        }
         constexpr int frames = 17003;
         for (int channels : {1, 2})
             for (double rate : {44100., 48000.})
@@ -82,7 +182,7 @@ int main()
                 player.beginBlock();
                 verify(frames - 1);
             }
-        std::cout << "PASS: bounded WAV streaming, mono/stereo, 44.1/48 kHz, fractional block boundaries, forward/back seeks and final frame\n";
+        std::cout << "PASS: bounded WAV streaming, mono/stereo, 44.1/48 kHz, fractional boundaries, seeks/final frame, synthetic reader stall/recovery/failure\n";
         return 0;
     }
     catch (const std::exception& error)
