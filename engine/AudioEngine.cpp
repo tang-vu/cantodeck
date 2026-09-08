@@ -146,6 +146,8 @@ void AudioEngine::close()
     native.reset();
     output.reset();
     input.reset();
+    inputPeak = vocalPeak = musicPeak = outputPeak = 0;
+    callbackLoad = 0;
 }
 void AudioEngine::prepareNative(const BackendFormat& f)
 {
@@ -313,10 +315,11 @@ void AudioEngine::render(const float* const* in, int ni, float* const* out, int 
         testRemaining = int(rate * 0.5);
         testPhase = 0;
     }
-    float peak = 0, mp = 0;
+    float peak = 0, mp = 0, vp = 0;
     for (int k = 0; k < n; ++k)
     {
         const float dry = bridge.next(), wet = dsp.process(dry, params);
+        vp = std::max(vp, std::abs(wet));
         monitorGain += 0.002f * ((params.monitor.load() && !fault.load() ? 1.f : 0.f) - monitorGain);
         masterGain += 0.001f * (params.master.load() - masterGain);
         musicGain += 0.001f * ((params.musicMute.load() ? 0.f : params.music.load()) - musicGain);
@@ -364,6 +367,7 @@ void AudioEngine::render(const float* const* in, int ni, float* const* out, int 
     }
     seconds = position / trackRate;
     outputPeak = std::max(peak, outputPeak.load() * 0.92f);
+    vocalPeak = std::max(vp, vocalPeak.load() * 0.92f);
     musicPeak = std::max(mp, musicPeak.load() * 0.92f);
     limiterGain = limiter.currentGain();
     callbackLoad =

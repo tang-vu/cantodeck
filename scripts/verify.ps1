@@ -8,6 +8,8 @@ $identityProcess = Start-Process -FilePath $exe -ArgumentList @('--build-info', 
 if ($identityProcess.ExitCode) { throw 'Build identity export failed' }
 $identity = Get-Content -LiteralPath "$evidencePath/build-info.json" -Raw | ConvertFrom-Json
 if (!$identity.buildRevision -or $identity.pointerBits -ne 64 -or $identity.juceRevision -ne '91ad83ae34a81e0833b1a2b0866f54846370ae53') { throw 'Unexpected build identity' }
+$meterProcess = Start-Process -FilePath $exe -ArgumentList @('--test-meters', ('"' + "$evidencePath/meters.txt" + '"')) -WindowStyle Hidden -Wait -PassThru
+if ($meterProcess.ExitCode) { throw "Engine meter verification failed: $($meterProcess.ExitCode)" }
 & "$repoPath/build/Release/core_tests.exe"
 if ($LASTEXITCODE) { throw 'Core tests failed' }
 & "$repoPath/build/Release/stream_tests.exe"

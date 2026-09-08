@@ -27,6 +27,44 @@ inline int runOffline(const juce::String& args)
     }
     auto ownedEngine = std::make_unique<canto::AudioEngine>();
     auto& engine = *ownedEngine;
+    if (tokens[0] == "--test-meters" && tokens.size() == 2)
+    {
+        engine.prepareOffline(48000);
+        engine.params.transparent = true;
+        engine.params.mic = 1;
+        engine.params.master = 1;
+        engine.params.monitor = false;
+        AudioBuffer<float> input(1, 256), output(2, 256);
+        for (int i = 0; i < 256; ++i)
+            input.setSample(0, i, 0.01f);
+        auto pump = [&]
+        {
+            for (int block = 0; block < 256; ++block)
+            {
+                engine.render(input.getArrayOfReadPointers(), 1, nullptr, 0, 256, true);
+                engine.render(nullptr, 0, output.getArrayOfWritePointers(), 2, 256, false);
+            }
+        };
+        pump();
+        const float base = engine.vocalPeak.load();
+        if (std::abs(engine.inputPeak.load() - 0.01f) > 1.e-6f ||
+            std::abs(base - 0.01f) > 1.e-5f || engine.outputPeak != 0 || engine.musicPeak != 0)
+            return 28;
+        engine.params.inputBoostDb = 12;
+        pump();
+        const float boosted = engine.vocalPeak.load();
+        if (std::abs(engine.inputPeak.load() - 0.01f) > 1.e-6f ||
+            std::abs(boosted / base - std::pow(10.f, 12.f / 20.f)) > 0.001f || engine.outputPeak != 0)
+            return 29;
+        engine.params.monitor = true;
+        pump();
+        if (std::abs(engine.outputPeak.load() - boosted) > 1.e-5f)
+            return 30;
+        engine.close();
+        if (engine.inputPeak != 0 || engine.vocalPeak != 0 || engine.musicPeak != 0 || engine.outputPeak != 0)
+            return 31;
+        return destination.replaceWithText("PASS: real engine dry input and processed-vocal meter separation; +12 dB boost changes voice, not input; monitor-off output silence; monitor-on output level; close clears meters. Synthetic DC only, no audio streams or recording.\n") ? 0 : 4;
+    }
     if (tokens[0] == "--diagnostics" || tokens[0] == "--probe" || tokens[0] == "--probe-low" ||
         tokens[0] == "--probe-native")
     {

@@ -52,6 +52,19 @@ The goal remains the full project specification and comfortable live singing thr
 
 ## Remaining acceptance work
 
+Vocal gain visibility (2026-09-08): the UI now distinguishes pre-gain MIC IN from
+post-DSP/fader VOICE and protected OUT. The new peak is computed from actual wet
+samples before monitor/master/mute, not from a slider or the music mix. Meter values
+clear after engine close; existing input/music/output peak-hold behavior otherwise
+remains. A localized tooltip explains why VOICE can show signal with monitoring off.
+`--test-meters` feeds synthetic 0.01 DC into the real engine: +12 dB software boost
+changes only the processed meter, monitor-off output stays silent, enabling monitor
+produces the expected output level, and close clears meters. No device streams or
+recording are used. Release/CTest passed 5/5, full verification passed in
+`build/evidence-20260908-224726`, and the main snapshot was visually inspected with
+the new labels fitting at 1080x820. This improves diagnosis of quiet-input complaints;
+it does not itself increase the audio gain or prove physical vocal quality/latency.
+
 Per-song lyric association (2026-09-08): successfully opening lyrics while a song
 is loaded now associates that LRC/TXT with the song. Up to 128 queue-associated
 descriptors persist only in local sessions, not exported vocal presets. Restoration

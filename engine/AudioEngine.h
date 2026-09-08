@@ -97,7 +97,7 @@ class AudioEngine : private juce::AudioIODeviceType::Listener
     LatencyProbe latencyProbe;
     std::atomic<bool> playing{false}, fault{false}, testRequested{false};
     std::atomic<bool> devicesChanged{false};
-    std::atomic<float> inputPeak{0}, musicPeak{0}, outputPeak{0};
+    std::atomic<float> inputPeak{0}, vocalPeak{0}, musicPeak{0}, outputPeak{0};
     std::atomic<float> limiterGain{1};
     std::atomic<double> seconds{0}, seek{-1}, callbackLoad{0};
     std::atomic<uint64_t> clipped{0};

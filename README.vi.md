@@ -34,6 +34,12 @@ Nút thử loa chỉ phát khi bạn nhấn, trong nửa giây ở mức nhỏ. 
 
 ## YouTube, loa Bluetooth và chống hú
 
+Meter **MIC VÀO** đo trước gain, nên không tăng khi bạn kéo Mic boost. Meter
+**GIỌNG** đo sau gain và hiệu ứng; **RA** đo mix sau master và bảo vệ đầu ra.
+Vì GIỌNG nằm trước nút nghe mic, nó vẫn có tín hiệu khi nghe mic tắt — không có
+nghĩa loa đang phát tiếng. Đây là mức số dBFS, không phải độ lớn âm thanh ngoài phòng.
+Đóng kết nối sẽ xóa các meter về mức im lặng.
+
 Bản mới có **Giọng gốc** (mặc định bật): giữ gain nhưng bỏ màu giọng và hiệu ứng. Tắt tùy chọn này khi muốn nghe Echo/Room. Trong Nâng cao, **Native** là backend WASAPI thử nghiệm; chọn rồi nhấn Kết nối để áp dụng. Chưa xác nhận nó giải quyết độ trễ trên bộ mic/loa của bạn. Nút **Đo trễ · phát thử** chỉ phát khi bạn chủ động nhấn; tạm dừng YouTube trước khi đo. Phép đo đã được kiểm thử bằng tín hiệu tổng hợp, chưa xác minh trên thiết bị thật. Xem [chi tiết thay đổi và giới hạn](docs/AUDIO_REWORK.md).
 
 Nếu giọng bị trễ: mở **Nâng cao**, bật **Giảm trễ**, chọn **128 samples**, rồi nhấn **Kết nối** và chủ động bật nghe mic lại. Đây là WASAPI shared low-latency, vẫn cho phép ứng dụng khác phát nhạc. Thiết bị quyết định buffer thực; xem chẩn đoán. Nếu lách tách, tăng buffer hoặc tắt Giảm trễ. Tắt Echo/Room lúc so sánh để tránh nhầm tiếng echo chủ ý với độ trễ giọng trực tiếp.

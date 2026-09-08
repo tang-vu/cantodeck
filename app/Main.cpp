@@ -361,6 +361,8 @@ class Console final : public Component, private Timer
     }
     void localize()
     {
+        meters.setTooltip(tr("MIC VÀO: trước gain. GIỌNG: sau gain/hiệu ứng, trước nút Nghe mic và master. RA: mix ra loa. GIỌNG vẫn có thể lên khi nghe mic tắt; đây không phải âm lượng thực ngoài loa.",
+                             "MIC IN: before gain. VOICE: after gain/effects, before monitoring and master. OUT: output mix. VOICE can show signal with monitoring off; these are not acoustic loudness measurements."));
         clearQueue.setButtonText(tr("Xóa DS", "Clear queue"));
         queue.setTextWhenNothingSelected(tr("Chọn bài trong danh sách", "Choose a queued song"));
         title.setText("CantoDeck  /  WINDOWS ALPHA", dontSendNotification);
@@ -1019,13 +1021,16 @@ class Console final : public Component, private Timer
         mute.setColour(TextButton::buttonColourId,
                        engine.params.mute.load() ? Colours::red : Colour(0xff81393d));
         auto db = [](float f) { return String(Decibels::gainToDecibels(f, -90.f), 1) + " dBFS"; };
-        meters.setText("MIC  " + db(engine.inputPeak) + "       MUSIC  " + db(engine.musicPeak) +
-                           "       MASTER  " + db(engine.outputPeak) +
+        meters.setText(tr("MIC VÀO  ", "MIC IN  ") + db(engine.inputPeak) +
+                           tr("    GIỌNG  ", "    VOICE  ") + db(engine.vocalPeak) +
+                           tr("    NHẠC  ", "    MUSIC  ") + db(engine.musicPeak) +
+                           tr("    RA  ", "    OUT  ") + db(engine.outputPeak) +
                            (engine.recorder.active.load() ? "      REC ●" : "") +
                            (engine.params.monitor.load() ? "     MONITOR ON" : "     MONITOR OFF"),
                        dontSendNotification);
         meters.setColour(Label::textColourId,
-                         engine.inputPeak.load() >= 0.98f || engine.outputPeak.load() >= 0.94f
+                         engine.inputPeak.load() >= 0.98f || engine.vocalPeak.load() >= 0.98f ||
+                         engine.outputPeak.load() >= 0.94f
                              ? Colours::orange
                              : Colours::white);
         if (!position.isMouseButtonDown())

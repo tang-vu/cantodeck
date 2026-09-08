@@ -37,6 +37,14 @@ The main view has mic/music/master gain, meters, six editable vocal presets, ech
 
 ## Audio and recording semantics
 
+Meters distinguish MIC IN (pre-gain input), VOICE (post-vocal-DSP/fader, before
+monitoring/master) and OUT (protected output mix), with a separate MUSIC meter.
+Software boost changes VOICE, not MIC IN. VOICE can remain active while monitoring
+or global output is muted; it is not an acoustic-loudness meter or a claim of audible
+output. Closing the engine clears the meters. `--test-meters report.txt` checks these
+engine taps with synthetic input, without audio streams or recording, and is included
+in `scripts/verify.ps1`.
+
 The low-latency bridge (also used by the native backend) starts with its existing small FIFO target. After an actual FIFO
 underrun it adds a bounded jitter reserve: one quarter of the summed capture quantum
 and output quantum converted to input frames (minimum 32 frames), at most twice,
