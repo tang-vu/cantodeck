@@ -642,6 +642,10 @@ class Console final : public Component, private Timer
     }
     void timerCallback() override
     {
+        // Finalize an interrupted take on the control thread, never in a device
+        // callback. Do not race the worker that is replacing a backing track.
+        if (engine.fault.load() && engine.recorder.active.load() && !trackLoad.valid())
+            engine.stopRecording();
         if (engine.devicesChanged.exchange(false))
         {
             engine.scan();

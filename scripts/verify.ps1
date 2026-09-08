@@ -36,4 +36,4 @@ foreach ($name in @('render.wav','render-dry.wav','render-wet.wav')) {
 }
 $process = Start-Process -FilePath $exe -ArgumentList @('--diagnostics', ('"' + "$evidencePath/diagnostics.txt" + '"')) -PassThru -Wait -WindowStyle Hidden
 if ($process.ExitCode) { throw 'Diagnostics failed' }
-Write-Output "Verified offline graph + mix/dry/wet WAV finalization: $evidencePath"
+Write-Output "Verified offline graph, mix/dry/wet WAV finalization and injected-fault silence: $evidencePath"

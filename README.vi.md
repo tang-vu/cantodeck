@@ -40,6 +40,7 @@ Nếu mic nhỏ: bản mới có **Mic boost dB** ngay trên màn hình chính. 
 - MIC có tín hiệu nhưng MASTER không: kiểm tra nút nghe mic, MUTE ALL, Mic và Master.
 - MASTER có tín hiệu nhưng không nghe: kiểm tra đúng loa, âm lượng Windows và âm lượng loa vật lý.
 - Mất/rút thiết bị: nghe mic bị tắt; nhấn Quét thiết bị, chọn lại, Kết nối và chủ động bật nghe mic lại.
+- Khi đã nhận lỗi thiết bị, mix và nhánh thu dry/wet cùng im; giao diện sẽ dừng và đóng phiên thu đang chạy, chờ xong thao tác tải nhạc nếu có. Kiểm thử báo lỗi bằng phần mềm đã chạy; thao tác rút/cắm thiết bị thật vẫn cần xác minh.
 - Lách tách: thử buffer 1024 trong Nâng cao, kết nối lại. Buffer lớn có thể tăng độ trễ.
 - Thu bị lỗi: nhấn Dừng thu để đóng file; kiểm tra dung lượng đĩa, quyền thư mục và chẩn đoán. Không thu quá ba giờ mỗi file.
 

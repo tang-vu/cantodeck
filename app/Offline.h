@@ -110,5 +110,40 @@ inline int runOffline(const juce::String& args)
     engine.render(nullptr, 0, output.getArrayOfWritePointers(), 2, 256, false);
     if (output.getMagnitude(0, 256) != 0)
         return 10;
+    // Offline fault injection: no device streams are opened. Verify both the
+    // output and recorder taps fail silent even if the monitor flag is still on.
+    engine.params.mute = false;
+    engine.params.monitor = true;
+    engine.fault = true;
+    const auto faultFile = destination.getSiblingFile(destination.getFileNameWithoutExtension() + "-fault.wav");
+    if (engine.recorder.start(faultFile, reader->sampleRate, true).isNotEmpty())
+        return 14;
+    for (int block = 0; block < 16; ++block)
+    {
+        for (int c = 0; c < 2; ++c)
+            for (int k = 0; k < 256; ++k)
+                input.setSample(c, k, 0.25f);
+        engine.render(input.getArrayOfReadPointers(), 2, nullptr, 0, 256, true);
+        engine.render(nullptr, 0, output.getArrayOfWritePointers(), 2, 256, false);
+        if (output.getMagnitude(0, 256) != 0)
+            return 15;
+    }
+    engine.recorder.stop();
+    if (engine.recorder.failed.load() || engine.recorder.frames.load() != 4096)
+        return 16;
+    for (auto suffix : {String{}, String("-dry"), String("-wet")})
+    {
+        const auto file = suffix.isEmpty() ? faultFile : faultFile.getSiblingFile(
+            faultFile.getFileNameWithoutExtension() + suffix + ".wav");
+        auto stream = file.createInputStream();
+        if (!stream)
+            return 17;
+        std::unique_ptr<AudioFormatReader> check(format.createReaderFor(stream.release(), true));
+        if (!check || check->lengthInSamples != 4096 || check->numChannels != (suffix.isEmpty() ? 2u : 1u))
+            return 17;
+        AudioBuffer<float> silence(int(check->numChannels), 4096);
+        if (!check->read(&silence, 0, 4096, 0, true, true) || silence.getMagnitude(0, 4096) != 0)
+            return 18;
+    }
     return 0;
 }

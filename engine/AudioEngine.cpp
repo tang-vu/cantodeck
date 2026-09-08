@@ -349,7 +349,8 @@ void AudioEngine::render(const float* const* in, int ni, float* const* out, int 
         for (int c = 0; c < no; ++c)
             if (out[c])
                 out[c][k] = no == 1 ? (mix[0] + mix[1]) * 0.5f : mix[std::min(c, 1)];
-        recorder.push({mix[0], mix[1], params.mute.load() ? 0.f : dry, params.mute.load() ? 0.f : wet});
+        const bool silenceStems = params.mute.load() || fault.load();
+        recorder.push({mix[0], mix[1], silenceStems ? 0.f : dry, silenceStems ? 0.f : wet});
     }
     seconds = position / trackRate;
     outputPeak = std::max(peak, outputPeak.load() * 0.92f);
