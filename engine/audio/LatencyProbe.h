@@ -39,6 +39,7 @@ class LatencyProbe
     double rate = 48000;
     size_t position = 0;
     std::atomic<State> phase{State::idle};
+    std::atomic<bool> analysing{false};
 
   public:
     void prepare(double sampleRate)
@@ -61,7 +62,7 @@ class LatencyProbe
     }
     bool begin() noexcept
     {
-        if (captured.empty())
+        if (captured.empty() || analysing.load())
             return false;
         auto state = phase.load();
         if (state != State::idle && state != State::complete && state != State::cancelled)
@@ -100,12 +101,29 @@ class LatencyProbe
     }
     // Worker thread only. Returns an explicit invalid result for silence,
     // ambiguous returns or clipping; never substitutes a buffer-based estimate.
-    LatencyResult analyse()
+    LatencyResult analyse() { return analyse([] {}); }
+    // Worker-only start notification also permits deterministic cancellation tests.
+    template <typename OnStarted> LatencyResult analyse(OnStarted onStarted)
     {
+        if (analysing.exchange(true))
+            return {false, 0, 0, 0, false, "Analysis already running"};
+        struct AnalysisGuard
+        {
+            std::atomic<bool>& active;
+            ~AnalysisGuard() { active = false; }
+        } guard{analysing};
         auto expected = State::ready;
         if (!phase.compare_exchange_strong(expected, State::analysing))
             return {false, 0, 0, 0, false, "No completed probe"};
+        onStarted();
         LatencyResult result;
+        auto finish = [&]()
+        {
+            auto active = State::analysing;
+            if (!phase.compare_exchange_strong(active, State::complete))
+                return LatencyResult{false, 0, 0, 0, false, "Measurement cancelled"};
+            return result;
+        };
         const double n = double(signalLength);
         double sumR = 0, squareR = 0;
         for (float x : emitted)
@@ -117,8 +135,7 @@ class LatencyProbe
         if (energyR < 1.e-10)
         {
             result.reason = "Output muted or probe too quiet";
-            phase = State::complete;
-            return result;
+            return finish();
         }
         std::vector<double> sum(captured.size() + 1), energy(captured.size() + 1),
             scores(captured.size() - signalLength + 1);
@@ -134,6 +151,8 @@ class LatencyProbe
         double signedBest = 0;
         for (size_t lag = 0; lag < scores.size(); ++lag)
         {
+            if (phase.load() != State::analysing)
+                return finish();
             const double sumC = sum[lag + signalLength] - sum[lag],
                          energyC = energy[lag + signalLength] - energy[lag] - sumC * sumC / n;
             if (energyC < 1.e-12)
@@ -161,8 +180,7 @@ class LatencyProbe
             result.reason = clipped >= signalLength / 20 ? "Input clipped"
                             : result.correlation < 0.35  ? "No reliable acoustic/electrical return"
                                                          : "Ambiguous returns or competing audio";
-        phase.store(State::complete, std::memory_order_release);
-        return result;
+        return finish();
     }
 };
 } // namespace canto

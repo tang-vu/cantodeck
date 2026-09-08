@@ -8,6 +8,7 @@
 #include <fstream>
 #include <string>
 #include <thread>
+#include <latch>
 void check(bool v, const char* message)
 {
     if (!v)
@@ -272,6 +273,35 @@ int main(int argc, char** argv)
             auto muted = measure([](const auto&, size_t) { return 0.f; }, true);
             check(!muted.valid && muted.reason == "Output muted or probe too quiet",
                   "measurement rejects muted output rather than reporting zero latency");
+            check(probe.begin(), "prepare worker cancellation regression");
+            while (probe.state() != canto::LatencyProbe::State::ready)
+            {
+                const float generated = probe.signal();
+                probe.feed(generated, generated);
+            }
+            canto::LatencyResult cancelledResult;
+            std::latch analysisStarted(1), releaseAnalysis(1);
+            std::thread analysisWorker([&]
+            {
+                cancelledResult = probe.analyse([&]
+                {
+                    analysisStarted.count_down();
+                    releaseAnalysis.wait();
+                });
+            });
+            analysisStarted.wait();
+            const bool observedAnalysis = probe.state() == canto::LatencyProbe::State::analysing;
+            const bool duplicateRejected = !probe.begin();
+            probe.cancel();
+            const bool cancelledRestartRejected = !probe.begin();
+            releaseAnalysis.count_down();
+            analysisWorker.join();
+            check(observedAnalysis && duplicateRejected && cancelledRestartRejected,
+                  "worker analysis is observed and cannot be restarted while active");
+            check(!cancelledResult.valid && probe.state() == canto::LatencyProbe::State::cancelled,
+                  "cancelled analysis cannot publish success or resurrect completion");
+            check(probe.begin(), "measurement can restart after cancelled worker joins");
+            probe.cancel();
             canto::SamplePeakLimiter limiter;
             limiter.prepare(sr);
             for (int i = 0; i < int(sr); ++i)

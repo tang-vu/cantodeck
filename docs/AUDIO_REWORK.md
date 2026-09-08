@@ -52,6 +52,17 @@ The goal remains the full project specification and comfortable live singing thr
 
 ## Remaining acceptance work
 
+Analysis cancellation follow-up (2026-09-08): a cancelled latency-analysis worker
+can no longer overwrite cancellation with completion or publish a valid result.
+An independent worker-active guard prevents restarting into buffers still being
+read after cancellation. Correlation checks cancellation between candidate lags;
+completion uses compare/exchange. A worker-start notification permits a deterministic
+two-thread regression at 44.1/48 kHz: hold analysis, reject duplicate start, cancel,
+reject restart while the worker is held, release/join, verify invalid result and
+cancelled state, then verify restart. Preparation still requires stopped callbacks
+and a joined analysis worker. Release/CTest passed 3/3 and full verification passed
+in `build/evidence-20260908-220713`. No acoustic measurement was performed.
+
 Final-frame playback regression (2026-09-08): the engine stopped at `length - 1`,
 although the streaming reader can return the final frame. It now stops at `length`.
 The actual-engine `--test-playback` check requires the ending position to reach the
