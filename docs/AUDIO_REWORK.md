@@ -52,6 +52,18 @@ The goal remains the full project specification and comfortable live singing thr
 
 ## Remaining acceptance work
 
+Session recovery follow-up (2026-09-08): restoration and last-good backup eligibility
+now share an exact numeric version-1 check, instead of integer coercion or accepting
+any JSON object. Startup considers the backup even when the primary file is missing
+or is an unsupported/malformed object. Unsupported current JSON cannot overwrite
+the last-good backup during save. Pure recovery selection plus actual Console
+restore rejection is exercised by isolated UI smoke for missing/malformed values,
+string/bool/fractional/future versions, valid-primary precedence and valid-backup
+fallback. Numeric `1.0` remains accepted. Release/CTest passed 3/3 and full offline/
+UI verification passed in `build/evidence-20260908-221658`. No real user session was
+read/written by smoke. This checks supported schema selection, not a complete
+filesystem crash/permissions failure matrix or validation of every optional field.
+
 Accelerated recording endurance (2026-09-08): `scripts/soak-offline.ps1 -Seconds
 1800` completed with exit 0 in 72.935 seconds of renderer wall time. A repeating
 48 kHz tone/impulse/silence fixture entered the actual microphone DSP and recorder;

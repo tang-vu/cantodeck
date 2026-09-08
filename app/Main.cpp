@@ -3,6 +3,7 @@
 #include "Offline.h"
 #include "EqPanel.h"
 #include "LyricText.h"
+#include "SessionState.h"
 #include <future>
 
 using namespace juce;
@@ -153,7 +154,7 @@ class Console final : public Component, private Timer
     }
     bool restore(const var& v, bool devices)
     {
-        if (!v.isObject() || int(v["version"]) != 1)
+        if (!supportedSessionState(v))
         {
             notify("Unsupported/invalid JSON version");
             return false;
@@ -247,7 +248,7 @@ class Console final : public Component, private Timer
         if (!persistSession)
             return;
         settings.getParentDirectory().createDirectory();
-        if (settings.existsAsFile() && JSON::parse(settings).isObject())
+        if (settings.existsAsFile() && supportedSessionState(JSON::parse(settings)))
             settings.copyFileTo(settings.getSiblingFile("session.last-good.json"));
         TemporaryFile temp(settings);
         if (temp.getFile().replaceWithText(JSON::toString(state(true))))
@@ -653,12 +654,12 @@ class Console final : public Component, private Timer
                    });
         };
         scan();
-        if (persistSession && settings.existsAsFile())
+        if (persistSession)
         {
-            auto v = JSON::parse(settings);
-            if (!v.isObject())
-                v = JSON::parse(settings.getSiblingFile("session.last-good.json"));
-            restore(v, true);
+            const auto v = recoverSessionState(JSON::parse(settings),
+                                              JSON::parse(settings.getSiblingFile("session.last-good.json")));
+            if (!v.isVoid())
+                restore(v, true);
         }
         localize();
         setSize(1080, 820);
@@ -685,6 +686,21 @@ class Console final : public Component, private Timer
     }
     bool smokeEq(const File& file)
     {
+        const auto goodState = JSON::parse(R"({"version":1,"marker":"backup"})");
+        const auto primaryState = JSON::parse(R"({"version":1,"marker":"primary"})");
+        if (recoverSessionState(primaryState, goodState)["marker"].toString() != "primary")
+            return false;
+        for (const auto* invalid : {"null", "[]", "{}", "broken json", R"({"version":true})",
+                                   R"({"version":"1"})", R"({"version":1.5})", R"({"version":2})"})
+        {
+            const auto badState = JSON::parse(invalid);
+            if (supportedSessionState(badState) || restore(badState, false) ||
+                recoverSessionState(badState, goodState)["marker"].toString() != "backup" ||
+                !recoverSessionState(badState, badState).isVoid())
+                return false;
+        }
+        if (!supportedSessionState(JSON::parse(R"({"version":1.0})")))
+            return false;
         if (!lyricTimestamp("02:03.125") || std::abs(*lyricTimestamp("02:03.125") - 123.125) > 1.e-9)
             return false;
         for (const auto* invalid : {"00:60", "1:xyz", "-1:20", "1:2.3.4", "1:20.", "ar:Artist", "1:20abc"})
