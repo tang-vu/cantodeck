@@ -34,6 +34,11 @@ Nút thử loa chỉ phát khi bạn nhấn, trong nửa giây ở mức nhỏ. 
 
 ## YouTube, loa Bluetooth và chống hú
 
+Chọn preset sẽ đặt lại trạng thái các bộ xử lý, kể cả EQ và Nhại/Vang. Natural và
+Dry Recording dùng **Giọng gốc**; Dry Recording tắt thêm EQ/hiệu ứng. Chọn preset
+không tự bật nghe mic hay bỏ **TẮT TẤT CẢ**. Preset JSON nhập vào vẫn dùng trạng thái
+bypass đã lưu trong file.
+
 Meter **MIC VÀO** đo trước gain, nên không tăng khi bạn kéo **Tăng mic (dB)**. Meter
 **GIỌNG** đo sau gain và hiệu ứng; **RA** đo mix sau master và bảo vệ đầu ra.
 Vì GIỌNG nằm trước nút nghe mic, nó vẫn có tín hiệu khi nghe mic tắt — không có

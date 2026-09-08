@@ -521,6 +521,8 @@ class Console final : public Component, private Timer
             delay.setValue(p == 2 ? 220 : 180);
             gate.setToggleState(p == 5, sendNotificationSync);
             compressor.setToggleState(p != 6 && p != 1, sendNotificationSync);
+            eq.setToggleState(p != 6, sendNotificationSync);
+            effects.setToggleState(p != 6, sendNotificationSync);
             transparent.setToggleState(p == 1 || p == 6, sendNotificationSync);
         };
         transparent.onClick = [this] { engine.params.transparent = transparent.getToggleState(); };
@@ -771,6 +773,28 @@ class Console final : public Component, private Timer
     }
     bool smokeEq(const File& file)
     {
+        const auto stateBeforePresets = JSON::parse(JSON::toString(state(true)));
+        const int originalPreset = preset.getSelectedId();
+        const bool originalMute = engine.params.mute.load();
+        engine.params.mute = true;
+        for (int id = 1; id <= 6; ++id)
+        {
+            eq.setToggleState(false, sendNotificationSync);
+            effects.setToggleState(false, sendNotificationSync);
+            transparent.setToggleState(true, sendNotificationSync);
+            preset.setSelectedId(0, dontSendNotification);
+            preset.setSelectedId(id, sendNotificationSync);
+            if (engine.params.eq.load() != (id != 6) || engine.params.effects.load() != (id != 6) ||
+                engine.params.transparent.load() != (id == 1 || id == 6) ||
+                engine.params.compressor.load() != (id != 6 && id != 1) ||
+                engine.params.gate.load() != (id == 5) || engine.params.monitor.load() ||
+                !engine.params.mute.load())
+                return false;
+        }
+        if (!restore(stateBeforePresets, true))
+            return false;
+        preset.setSelectedId(originalPreset, dontSendNotification);
+        engine.params.mute = originalMute;
         const auto stateBeforeLanguage = JSON::toString(state());
         const bool originalLanguage = vi;
         const int originalBuffer = buffer.getSelectedId();

@@ -37,6 +37,12 @@ The main view has mic/music/master gain, meters, six editable vocal presets, ech
 
 ## Audio and recording semantics
 
+Selecting a named vocal preset resets its processor bypasses, including EQ and
+echo/room, so a previously bypassed effect cannot silently defeat the preset.
+Natural and Dry Recording select transparent voice; Dry Recording also disables
+EQ/effects. Preset selection never enables monitoring or clears MUTE ALL. JSON
+imports retain their explicitly saved bypass settings.
+
 Meters distinguish MIC IN (pre-gain input), VOICE (post-vocal-DSP/fader, before
 monitoring/master) and OUT (protected output mix), with a separate MUSIC meter.
 Software boost changes VOICE, not MIC IN. VOICE can remain active while monitoring

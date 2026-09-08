@@ -52,6 +52,18 @@ The goal remains the full project specification and comfortable live singing thr
 
 ## Remaining acceptance work
 
+Named-preset bypass consistency (2026-09-08): preset selection already set the
+transparent-voice flag, but left EQ and echo/room bypasses from the previous state.
+It now sets those processor flags explicitly (off for Dry Recording, on otherwise;
+Natural remains transparent). Imported JSON still applies saved bypass choices.
+An isolated UI regression selects all six presets from bypassed EQ/effects and
+verifies gate/compressor/EQ/effect/transparent flags while MUTE ALL remains set and
+monitoring remains off. It restores the prior test-console state afterward.
+Release/CTest passed 5/5 and full verification passed in
+`build/evidence-20260908-225550`. This fixes preset application; no physical listening
+quality or latency improvement is inferred. Hosted CI for `85a5351` passed:
+[run 34247144392](https://github.com/tang-vu/cantodeck/actions/runs/34247144392).
+
 Vietnamese control labels (2026-09-08): main/advanced fader labels, device placeholders,
 monitor state, buffer units, effect toggles and key setup/safety tooltips now switch
 VI/EN. Slider accessibility titles use translated display labels while stable
