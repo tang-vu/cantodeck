@@ -12,7 +12,7 @@ $revision = & git -C $jucePath rev-parse HEAD
 if ($revision -ne '91ad83ae34a81e0833b1a2b0866f54846370ae53') { throw 'JUCE revision does not match pin' }
 & git -C $jucePath archive --format=zip --output="$stagePath/source/JUCE-8.0.15.zip" HEAD
 if ($LASTEXITCODE) { throw 'JUCE source archive failed' }
-$sourcePaths = @('app','engine','platform','tests','scripts','docs','.github','CMakeLists.txt','.gitignore','.gitattributes','README.md','README.vi.md','CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','LICENSE','THIRD_PARTY_NOTICES.md') | ForEach-Object { Join-Path $repoPath $_ }
+$sourcePaths = @('app','engine','platform','tests','scripts','docs','.github','CMakeLists.txt','.gitignore','.gitattributes','.clang-format','README.md','README.vi.md','CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','LICENSE','THIRD_PARTY_NOTICES.md') | ForEach-Object { Join-Path $repoPath $_ }
 Compress-Archive -LiteralPath $sourcePaths -DestinationPath "$stagePath/source/CantoDeck-0.1.0-source.zip"
 $notices = @{
  'JUCE-LICENSE.md'='LICENSE.md';

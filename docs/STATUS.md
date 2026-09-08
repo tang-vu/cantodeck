@@ -1,5 +1,7 @@
 # Implementation and evidence — 2026-09-07
 
+**Active work resumed 2026-09-08:** see [AUDIO_REWORK.md](AUDIO_REWORK.md) for the native backend, transparent path, improved resampling/limiting, measurement tool and current verification state. The older checkpoint details below remain historical evidence; they are not a claim that the current goal is complete.
+
 ## Outcome
 
 A native Windows x64 development-preview executable has been built and launched. The owner reports unacceptable delay and unnatural vocal sound when singing through external speakers. The real-time software path exists but the primary karaoke experience has not passed acceptance. Physical round-trip/30-minute soak gates are open, so release 0.2 has not started. No system audio defaults or drivers were changed. Repository publication/CI are separate from audio acceptance; see GitHub Actions for hosted build results.

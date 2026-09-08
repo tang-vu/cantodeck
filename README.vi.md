@@ -20,6 +20,8 @@ Nút thử loa chỉ phát khi bạn nhấn, trong nửa giây ở mức nhỏ. 
 
 ## YouTube, loa Bluetooth và chống hú
 
+Bản mới có **Giọng gốc** (mặc định bật): giữ gain nhưng bỏ màu giọng và hiệu ứng. Tắt tùy chọn này khi muốn nghe Echo/Room. Trong Nâng cao, **Native** là backend WASAPI thử nghiệm; chọn rồi nhấn Kết nối để áp dụng. Chưa xác nhận nó giải quyết độ trễ trên bộ mic/loa của bạn. Nút **Đo trễ · phát thử** chỉ phát khi bạn chủ động nhấn; tạm dừng YouTube trước khi đo. Phép đo đã được kiểm thử bằng tín hiệu tổng hợp, chưa xác minh trên thiết bị thật. Xem [chi tiết thay đổi và giới hạn](docs/AUDIO_REWORK.md).
+
 Nếu giọng bị trễ: mở **Nâng cao**, bật **Giảm trễ**, chọn **128 samples**, rồi nhấn **Kết nối** và chủ động bật nghe mic lại. Đây là WASAPI shared low-latency, vẫn cho phép ứng dụng khác phát nhạc. Thiết bị quyết định buffer thực; xem chẩn đoán. Nếu lách tách, tăng buffer hoặc tắt Giảm trễ. Tắt Echo/Room lúc so sánh để tránh nhầm tiếng echo chủ ý với độ trễ giọng trực tiếp.
 
 Với DGM20, thử cắm tai nghe có dây vào cổng tai nghe của mic và chọn **Headphones (DGM20 USB Microphone)**. Lượt mở thử im lặng trên máy này nhận được 128 mẫu cho cả input/output ở 48 kHz; đầu ra Realtek vẫn dùng 480 mẫu trong lượt thử. Đây là số liệu buffer, chưa phải đo độ trễ từ mic đến tai nghe. Nếu nghe hai đường giọng đồng thời, kiểm tra tính năng nghe trực tiếp của phần cứng; nó khác đường hiệu ứng qua máy.
