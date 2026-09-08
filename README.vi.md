@@ -26,7 +26,7 @@ Chạy `CantoDeck.exe` trong thư mục portable, hoặc từ mã nguồn:
 
 1. Cắm mic USB và tai nghe có dây vào laptop. Hoặc cắm mic vào sound card/interface USB, tai nghe/loa vào interface đó. Mic XLR thụ động cần preamp/interface phù hợp; phần mềm không cấp phantom power.
 2. Mở CantoDeck, chọn mic và loa/tai nghe, nhấn **Kết nối**. Hạ âm lượng loa vật lý trước. Nói vào mic, kiểm tra mức MIC thay đổi; nếu không có tín hiệu, kiểm tra quyền Microphone cho ứng dụng desktop trong Windows Settings.
-3. Nhấn **Bật / tắt nghe mic**. Tăng Mic/Master từ từ. Chọn Warm Karaoke hoặc chỉnh Echo/Room. Nếu interface bật direct monitoring, hãy tắt đường đó khi muốn nghe hiệu ứng từ máy để tránh nghe hai giọng.
+3. Nhấn **Bật / tắt nghe mic**. Tăng **Mức giọng / Âm lượng tổng** từ từ. Tắt **Giọng gốc** khi muốn nghe hiệu ứng, rồi chọn Warm Karaoke hoặc chỉnh **Tiếng nhại / Vang phòng** (Echo/Room ở giao diện tiếng Anh). Nếu interface bật direct monitoring, hãy tắt đường đó khi muốn nghe hiệu ứng từ máy để tránh nghe hai giọng.
 4. Nhấn **Mở nhạc WAV**, rồi **Phát / Tạm dừng**. Có thể thêm các bài khác và chọn trong danh sách; hết bài sẽ dừng. Mở LRC cùng tên tự động, hoặc dùng **Mở LRC / TXT**. Cửa sổ lời hỗ trợ F11 toàn màn hình, Esc thoát toàn màn hình.
 5. Nhấn **Thu / Dừng thu**, chọn tên WAV mới. Nhấn lại để đóng file đúng cách. Bật “Thu thêm giọng dry / wet” trước khi thu nếu cần ba file. Mix chứa nhạc WAV và giọng đang nghe; dry/wet vẫn thu mic khi tắt nghe mic. Nút **TẮT TẤT CẢ** tắt cả đầu ra và các stem, không kết thúc phiên thu.
 
@@ -34,7 +34,7 @@ Nút thử loa chỉ phát khi bạn nhấn, trong nửa giây ở mức nhỏ. 
 
 ## YouTube, loa Bluetooth và chống hú
 
-Meter **MIC VÀO** đo trước gain, nên không tăng khi bạn kéo Mic boost. Meter
+Meter **MIC VÀO** đo trước gain, nên không tăng khi bạn kéo **Tăng mic (dB)**. Meter
 **GIỌNG** đo sau gain và hiệu ứng; **RA** đo mix sau master và bảo vệ đầu ra.
 Vì GIỌNG nằm trước nút nghe mic, nó vẫn có tín hiệu khi nghe mic tắt — không có
 nghĩa loa đang phát tiếng. Đây là mức số dBFS, không phải độ lớn âm thanh ngoài phòng.
@@ -42,7 +42,7 @@ nghĩa loa đang phát tiếng. Đây là mức số dBFS, không phải độ l
 
 Bản mới có **Giọng gốc** (mặc định bật): giữ gain nhưng bỏ màu giọng và hiệu ứng. Tắt tùy chọn này khi muốn nghe Echo/Room. Trong Nâng cao, **Native** là backend WASAPI thử nghiệm; chọn rồi nhấn Kết nối để áp dụng. Chưa xác nhận nó giải quyết độ trễ trên bộ mic/loa của bạn. Nút **Đo trễ · phát thử** chỉ phát khi bạn chủ động nhấn; tạm dừng YouTube trước khi đo. Phép đo đã được kiểm thử bằng tín hiệu tổng hợp, chưa xác minh trên thiết bị thật. Xem [chi tiết thay đổi và giới hạn](docs/AUDIO_REWORK.md).
 
-Nếu giọng bị trễ: mở **Nâng cao**, bật **Giảm trễ**, chọn **128 samples**, rồi nhấn **Kết nối** và chủ động bật nghe mic lại. Đây là WASAPI shared low-latency, vẫn cho phép ứng dụng khác phát nhạc. Thiết bị quyết định buffer thực; xem chẩn đoán. Nếu lách tách, tăng buffer hoặc tắt Giảm trễ. Tắt Echo/Room lúc so sánh để tránh nhầm tiếng echo chủ ý với độ trễ giọng trực tiếp.
+Nếu giọng bị trễ: mở **Nâng cao**, bật **Giảm trễ**, chọn **128 mẫu** (128 samples), rồi nhấn **Kết nối** và chủ động bật nghe mic lại. Đây là WASAPI shared low-latency, vẫn cho phép ứng dụng khác phát nhạc. Thiết bị quyết định buffer thực; xem chẩn đoán. Nếu lách tách, tăng buffer hoặc tắt Giảm trễ. Tắt **Nhại / Vang** lúc so sánh để tránh nhầm tiếng echo chủ ý với độ trễ giọng trực tiếp.
 
 Với DGM20, thử cắm tai nghe có dây vào cổng tai nghe của mic và chọn **Headphones (DGM20 USB Microphone)**. Lượt mở thử im lặng trên máy này nhận được 128 mẫu cho cả input/output ở 48 kHz; đầu ra Realtek vẫn dùng 480 mẫu trong lượt thử. Đây là số liệu buffer, chưa phải đo độ trễ từ mic đến tai nghe. Nếu nghe hai đường giọng đồng thời, kiểm tra tính năng nghe trực tiếp của phần cứng; nó khác đường hiệu ứng qua máy.
 
@@ -54,11 +54,11 @@ Nếu hú, nhấn **TẮT TẤT CẢ**, giảm âm lượng loa, đưa mic xa v�
 
 ## Khi không có tiếng
 
-Room đã có thêm tầng khuếch tán đuôi vang; không đặt bộ trễ đó lên nhánh giọng trực tiếp. Đây vẫn là reverb mono cơ bản, chưa có đánh giá nghe thực tế. Muốn nghe Echo/Room, tắt **Giọng gốc** và bật **Echo / Room**; tăng từng chút, nhất là khi dùng loa ngoài.
+Room đã có thêm tầng khuếch tán đuôi vang; không đặt bộ trễ đó lên nhánh giọng trực tiếp. Đây vẫn là reverb mono cơ bản, chưa có đánh giá nghe thực tế. Muốn nghe hiệu ứng, tắt **Giọng gốc** và bật **Nhại / Vang** (Echo / Room); tăng từng chút, nhất là khi dùng loa ngoài.
 
 Trong **Nâng cao → EQ 3 bands**, mỗi dải có Frequency (tần số), Gain (tăng/giảm dB) và Q (Q càng cao, dải càng hẹp). Muốn nghe tác dụng, tắt **Giọng gốc** và bật **Vocal EQ**. Các dải mặc định 0 dB; đổi preset có sẵn sẽ đưa gain EQ về 0. Thông số được lưu cùng preset/session. Tăng dB có thể làm lớn tiếng nền hoặc gây hú; EQ này không tự chống hú và chưa được đánh giá nghe hát trên bộ loa của bạn.
 
-Nếu mic nhỏ: bản mới có **Mic boost dB** ngay trên màn hình chính. Thử +6 dB, rồi +12 dB nếu cần; thanh Mic có thể tăng tới 8 lần. Tăng từng chút khi dùng tai nghe, vì gain phần mềm cũng tăng tiếng nền. Mức MIC hiển thị vẫn là tín hiệu thô trước boost; nhìn MASTER để thấy thay đổi sau xử lý. Master 0,5 giảm biên độ đầu ra một nửa. Có thể thử tắt Expander trong Nâng cao khi tín hiệu đầu vào quá nhỏ. CantoDeck không tự thay đổi âm lượng đầu vào Windows hay gain vật lý của mic.
+Nếu mic nhỏ: dùng **Tăng mic (dB)** (Mic boost dB) trên màn hình chính. Thử +6 dB, rồi +12 dB nếu cần; **Mức giọng** có thể tăng tới 8 lần. Tăng từng chút khi dùng tai nghe, vì gain phần mềm cũng tăng tiếng nền. **MIC VÀO** vẫn là tín hiệu trước boost; nhìn **GIỌNG** để thấy mức sau xử lý và **RA** để xem mix đầu ra. **Âm lượng tổng** 0,5 giảm biên độ đầu ra một nửa. Có thể thử tắt **Giảm nền nhẹ** (Expander) trong Nâng cao khi tín hiệu đầu vào quá nhỏ. CantoDeck không tự thay đổi âm lượng đầu vào Windows hay gain vật lý của mic.
 
 - MIC không nhúc nhích: kiểm tra mic, dây, quyền Windows, channel 1/2 trong Nâng cao và gain phần cứng.
 - MIC có tín hiệu nhưng MASTER không: kiểm tra nút nghe mic, MUTE ALL, Mic và Master.

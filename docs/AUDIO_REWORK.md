@@ -52,6 +52,20 @@ The goal remains the full project specification and comfortable live singing thr
 
 ## Remaining acceptance work
 
+Vietnamese control labels (2026-09-08): main/advanced fader labels, device placeholders,
+monitor state, buffer units, effect toggles and key setup/safety tooltips now switch
+VI/EN. Slider accessibility titles use translated display labels while stable
+component names remain the existing JSON keys. Buffer item text changes explicitly
+restore the selected ID: pinned JUCE's item-text mutation alone leaves the old label
+and makes `getSelectedId()` return zero. This was caught during visual inspection
+of the initial local candidate and fixed before commit. Isolated UI smoke verifies
+valid buffer IDs, translated text/title, stable preset keys and unchanged settings
+after switching languages twice. Release/CTest passed 5/5 and full verification
+passed (`build/evidence-20260908-225308`); the advanced image was inspected at
+1080x820. README.vi now matches the new labels and explains the post-gain VOICE meter.
+Some dialogs, EQ-window labels and technical errors remain English; complete
+localization, high-DPI and screen-reader acceptance are not claimed.
+
 Vocal gain visibility (2026-09-08): the UI now distinguishes pre-gain MIC IN from
 post-DSP/fader VOICE and protected OUT. The new peak is computed from actual wet
 samples before monitor/master/mute, not from a slider or the music mix. Meter values

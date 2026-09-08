@@ -359,8 +359,49 @@ class Console final : public Component, private Timer
                                      lyricAssociations.contains(loadedTrack.getFullPathName())))
             lyricAssociations[loadedTrack.getFullPathName()] = file;
     }
+    String sliderLabel(const Slider& control) const
+    {
+        if (&control == &mic) return tr("Mức giọng", "Mic");
+        if (&control == &boost) return tr("Tăng mic (dB)", "Mic boost dB");
+        if (&control == &music) return tr("Nhạc", "Music");
+        if (&control == &master) return tr("Âm lượng tổng", "Master");
+        if (&control == &echo) return tr("Tiếng nhại", "Echo");
+        if (&control == &reverb) return tr("Vang phòng", "Room");
+        if (&control == &delay) return tr("Thời gian nhại (ms)", "Delay ms");
+        if (&control == &feedback) return tr("Mức lặp nhại", "Feedback");
+        if (&control == &tone) return tr("Màu âm", "Tone");
+        if (&control == &threshold) return tr("Ngưỡng nén (dB)", "Comp dB");
+        if (&control == &position) return tr("Vị trí bài (giây)", "Seek sec");
+        if (&control == &offset) return tr("Độ lệch lời (giây)", "Lyrics offset sec");
+        return control.getName();
+    }
     void localize()
     {
+        for (auto* control : {&mic, &boost, &music, &master, &echo, &reverb, &delay, &feedback,
+                              &tone, &threshold, &position, &offset})
+        {
+            control->setTitle(sliderLabel(*control));
+            control->setTooltip(sliderLabel(*control));
+        }
+        input.setTextWhenNothingSelected(tr("Chọn mic", "Microphone"));
+        output.setTextWhenNothingSelected(tr("Chọn loa / tai nghe", "Speakers / headphones"));
+        lowLatency.setTooltip(tr("WASAPI shared giảm trễ. Nhấn Kết nối để áp dụng; cần driver hỗ trợ. Tắt nếu không kết nối được hoặc tiếng lách tách.",
+                                 "WASAPI shared low-latency mode. Press Connect to apply. Requires driver support; disable if opening fails or sound crackles."));
+        nativeBackend.setTooltip(tr("WASAPI native dùng một luồng MMCSS cho mic và loa. Nhấn Kết nối để áp dụng. Còn thử nghiệm, chưa nghiệm thu nghe hát.",
+                                    "Native WASAPI uses one MMCSS thread for input and output. Press Connect to apply. Experimental; listening acceptance is incomplete."));
+        transparent.setTooltip(tr("Bỏ màu âm và hiệu ứng giọng, vẫn giữ gain. Dùng để so sánh giọng trực tiếp và độ trễ.",
+                                  "Bypass vocal coloration and effects while retaining gain. Use to compare direct voice and monitoring delay."));
+        boost.setTooltip(tr("Gain đầu vào bằng phần mềm, cũng tăng cả nhiễu. MIC VÀO không đổi; xem GIỌNG để kiểm tra mức sau gain.",
+                            "Software input gain also raises noise. MIC IN stays unchanged; check VOICE for post-gain level."));
+        clearQueue.setTooltip(tr("Xóa danh sách và liên kết lời đã lưu; không xóa file hoặc dừng bài đang phát.",
+                                 "Clear the queue and saved lyric associations, without deleting files or stopping the current song."));
+        measureLatency.setTooltip(tr("Phát tín hiệu nhỏ để đo đường loa → mic. Tạm dừng YouTube trước. Có tính thời gian truyền âm; dữ liệu mic chỉ ở RAM. Nghe mic vẫn tắt sau khi đo.",
+                                     "Plays a quiet speaker-to-mic probe. Pause YouTube first. Includes acoustic travel; mic data stays in RAM. Monitoring remains off afterward."));
+        eqEditor.setButtonText(tr("EQ 3 dải", "EQ 3 bands"));
+        const int selectedBuffer = buffer.getSelectedId();
+        for (int id = 1; id <= 4; ++id)
+            buffer.changeItemText(id, String(1 << (id + 6)) + tr(" mẫu", " samples"));
+        buffer.setSelectedId(selectedBuffer, dontSendNotification);
         meters.setTooltip(tr("MIC VÀO: trước gain. GIỌNG: sau gain/hiệu ứng, trước nút Nghe mic và master. RA: mix ra loa. GIỌNG vẫn có thể lên khi nghe mic tắt; đây không phải âm lượng thực ngoài loa.",
                              "MIC IN: before gain. VOICE: after gain/effects, before monitoring and master. OUT: output mix. VOICE can show signal with monitoring off; these are not acoustic loudness measurements."));
         clearQueue.setButtonText(tr("Xóa DS", "Clear queue"));
@@ -383,10 +424,10 @@ class Console final : public Component, private Timer
         exportButton.setButtonText(tr("Xuất preset", "Export preset"));
         diagnosticButton.setButtonText(tr("Lưu chẩn đoán", "Export diagnostics"));
         stems.setButtonText(tr("Thu thêm giọng dry / wet", "Separate dry / wet WAV"));
-        gate.setButtonText("Expander");
-        compressor.setButtonText("Compressor");
-        eq.setButtonText("Vocal EQ");
-        effects.setButtonText("Echo / Room");
+        gate.setButtonText(tr("Giảm nền nhẹ", "Expander"));
+        compressor.setButtonText(tr("Nén giọng", "Compressor"));
+        eq.setButtonText(tr("EQ giọng", "Vocal EQ"));
+        effects.setButtonText(tr("Nhại / Vang", "Echo / Room"));
         musicMute.setButtonText(tr("Tắt nhạc", "Mute music"));
         repaint();
         lowLatency.setButtonText(tr("Giảm trễ", "Low latency"));
@@ -730,6 +771,25 @@ class Console final : public Component, private Timer
     }
     bool smokeEq(const File& file)
     {
+        const auto stateBeforeLanguage = JSON::toString(state());
+        const bool originalLanguage = vi;
+        const int originalBuffer = buffer.getSelectedId();
+        if (originalBuffer < 1 || originalBuffer > 4)
+            return false;
+        vi = false;
+        localize();
+        if (sliderLabel(music) != "Music" || music.getTitle() != "Music")
+            return false;
+        vi = true;
+        localize();
+        if (sliderLabel(music) != String::fromUTF8("Nhạc") || music.getName() != "Music" ||
+            !state().hasProperty("Music") || state().hasProperty(String::fromUTF8("Nhạc")) ||
+            buffer.getSelectedId() != originalBuffer || !buffer.getText().contains(String::fromUTF8("mẫu")))
+            return false;
+        vi = originalLanguage;
+        localize();
+        if (JSON::toString(state()) != stateBeforeLanguage)
+            return false; // Translating labels must not change preset keys or audio settings.
         if (lyricFileOffset("offset:+500") != std::optional<double>(0.5) ||
             lyricFileOffset("offset:-1250") != std::optional<double>(-1.25) ||
             lyricFileOffset("offset:0") != std::optional<double>(0.0) ||
@@ -863,7 +923,7 @@ class Console final : public Component, private Timer
         for (auto* s :
              {&mic, &boost, &music, &master, &echo, &reverb, &delay, &feedback, &tone, &threshold, &offset})
             if (s->isVisible())
-                g.drawText(s->getName(), s->getX(), s->getY() - 18, s->getWidth(), 18,
+                g.drawText(sliderLabel(*s), s->getX(), s->getY() - 18, s->getWidth(), 18,
                            Justification::centredLeft);
     }
     void resized() override
@@ -1026,7 +1086,8 @@ class Console final : public Component, private Timer
                            tr("    NHẠC  ", "    MUSIC  ") + db(engine.musicPeak) +
                            tr("    RA  ", "    OUT  ") + db(engine.outputPeak) +
                            (engine.recorder.active.load() ? "      REC ●" : "") +
-                           (engine.params.monitor.load() ? "     MONITOR ON" : "     MONITOR OFF"),
+                           (engine.params.monitor.load() ? tr("     NGHE MIC BẬT", "     MONITOR ON")
+                                                         : tr("     NGHE MIC TẮT", "     MONITOR OFF")),
                        dontSendNotification);
         meters.setColour(Label::textColourId,
                          engine.inputPeak.load() >= 0.98f || engine.vocalPeak.load() >= 0.98f ||
