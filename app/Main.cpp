@@ -39,6 +39,7 @@ class Console final : public Component, private Timer
     };
     std::vector<Lyric> lines;
     String untimedLyrics;
+    double fileLyricOffset = 0;
     File settings =
         File::getSpecialLocation(File::userApplicationDataDirectory).getChildFile("CantoDeck/session.json");
     String tr(const char* a, const char* b) const { return String::fromUTF8(vi ? a : b); }
@@ -281,6 +282,7 @@ class Console final : public Component, private Timer
             return;
         }
         lines.clear();
+        fileLyricOffset = 0;
         StringArray text;
         text.addLines(String::createStringFromData(bytes.getData(), int(bytes.getSize())));
         for (auto line : text)
@@ -297,6 +299,8 @@ class Console final : public Component, private Timer
                 auto tag =
                     line.fromFirstOccurrenceOf("[", false, false).upToFirstOccurrenceOf("]", false, false);
                 line = line.fromFirstOccurrenceOf("]", false, false);
+                if (const auto adjustment = lyricFileOffset(tag))
+                    fileLyricOffset = *adjustment;
                 if (tag.containsChar(':') && CharacterFunctions::isDigit(tag[0]))
                 {
                     if (const auto timestamp = lyricTimestamp(tag))
@@ -686,6 +690,32 @@ class Console final : public Component, private Timer
     }
     bool smokeEq(const File& file)
     {
+        if (lyricFileOffset("offset:+500") != std::optional<double>(0.5) ||
+            lyricFileOffset("offset:-1250") != std::optional<double>(-1.25) ||
+            lyricFileOffset("offset:0") != std::optional<double>(0.0) ||
+            lyricFileOffset("offset:600000") != std::optional<double>(600.0))
+            return false;
+        for (const auto* invalid : {"offset:", "offset:+", "offset:1.5", "offset:1e3", "offset:--1",
+                                   "offset:600001", "offset:999999999999", "offset:12x", "ar:500"})
+            if (lyricFileOffset(invalid))
+                return false;
+        const auto lyricFixture = file.getSiblingFile("lyrics-offset-smoke.lrc");
+        const auto plainFixture = lyricFixture.withFileExtension("txt");
+        if (lyricFixture.exists() || plainFixture.exists() ||
+            !lyricFixture.replaceWithText(String::fromUTF8("[00:01.000]Lời thử\n[offset:+500]\n")))
+            return false;
+        readLyrics(lyricFixture);
+        if (fileLyricOffset != 0.5 || lines.size() != 1 || lines[0].time != 1.0 ||
+            lyricPlaybackTime(0.5, 0, fileLyricOffset) != lines[0].time ||
+            lyricPlaybackTime(0.5, -0.5, fileLyricOffset) != 0.5)
+            return false;
+        if (!plainFixture.replaceWithText("[offset:+500]\nLiteral text"))
+            return false;
+        readLyrics(plainFixture);
+        if (fileLyricOffset != 0 || !untimedLyrics.contains("[offset:+500]"))
+            return false;
+        lines.clear();
+        untimedLyrics.clear();
         const auto goodState = JSON::parse(R"({"version":1,"marker":"backup"})");
         const auto primaryState = JSON::parse(R"({"version":1,"marker":"primary"})");
         if (recoverSessionState(primaryState, goodState)["marker"].toString() != "primary")
@@ -911,6 +941,7 @@ class Console final : public Component, private Timer
                 position.setRange(0, std::max(1.0, engine.duration), 0.01);
                 lines.clear();
                 untimedLyrics.clear();
+                fileLyricOffset = 0;
                 auto lrc = pendingTrack.withFileExtension("lrc");
                 if (lrc.existsAsFile())
                     readLyrics(lrc);
@@ -938,7 +969,7 @@ class Console final : public Component, private Timer
         if (showAdvanced)
             details.setText(engine.diagnostics(), false);
         String lyric = untimedLyrics;
-        double now = engine.seconds.load() + offset.getValue();
+        double now = lyricPlaybackTime(engine.seconds.load(), offset.getValue(), fileLyricOffset);
         const auto nextLine = std::upper_bound(lines.begin(), lines.end(), now,
             [](double time, const Lyric& line) { return time < line.time; });
         if (nextLine != lines.begin())

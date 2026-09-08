@@ -2,6 +2,27 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <optional>
 
+inline std::optional<double> lyricFileOffset(const juce::String& tag)
+{
+    if (!tag.startsWith("offset:"))
+        return {};
+    auto value = tag.substring(7).trim();
+    const bool negative = value.startsWithChar('-');
+    if (negative || value.startsWithChar('+'))
+        value = value.substring(1);
+    if (value.isEmpty() || value.length() > 6 || !value.containsOnly("0123456789"))
+        return {};
+    const int milliseconds = value.getIntValue();
+    if (milliseconds > 600000)
+        return {};
+    return (negative ? -milliseconds : milliseconds) / 1000.0;
+}
+
+inline double lyricPlaybackTime(double songSeconds, double manualOffset, double fileOffset)
+{
+    return songSeconds + manualOffset + fileOffset;
+}
+
 inline std::optional<double> lyricTimestamp(const juce::String& tag)
 {
     const auto parts = juce::StringArray::fromTokens(tag, ":", "");

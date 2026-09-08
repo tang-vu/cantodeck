@@ -31,6 +31,14 @@ The main view has mic/music/master gain, meters, six editable vocal presets, ech
 
 ## Audio and recording semantics
 
+LRC `[offset:+500]` adjusts lyric lookup by milliseconds: positive values show lyrics
+earlier, negative values later. It adds to the manual lyric offset and does not alter
+audio timing. Signed integers with at most six digits and magnitude at most 600000 ms
+are accepted; invalid tags are ignored and the last valid tag wins globally. A newly
+loaded lyric file resets the file offset; TXT retains literal tags. Convention reference:
+[paroles LRC parser documentation](https://github.com/Clarkkkk/paroles). No parser dependency
+or third-party code was added.
+
 One mono mic bus selects channel 1, channel 2, or an equal average of the first two input channels. Stereo music and mono processed voice feed stereo output. Two separate USB microphones are not implemented.
 
 Signal path: input mapping → clock bridge → smoothed software input boost (0–24 dB, default 0) → vocal processing and mic gain → monitored voice plus stereo WAV → smoothed master → stereo-linked sample-peak limiter at 0.95. Transparent voice (default in the UI) bypasses coloration and effects while retaining gain. The processed path offers a 75 Hz high-pass, optional expander, legacy broad tone control plus three parametric bell EQ bands, compressor, echo and four damped room combs. Input meters and dry recording remain pre-boost. The room effect is basic. No de-esser, true-peak limiter or automatic anti-feedback is included.

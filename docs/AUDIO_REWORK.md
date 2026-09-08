@@ -52,6 +52,19 @@ The goal remains the full project specification and comfortable live singing thr
 
 ## Remaining acceptance work
 
+LRC file-offset support (2026-09-08): signed integer `[offset:...]` metadata now
+adds milliseconds to the lyric lookup clock (positive means earlier), independently
+of the manual slider and audio path. At most six digits, magnitude <=600000 ms;
+invalid tags are ignored, last valid tag wins globally, and a new lyric file or
+successful track change resets the file offset. TXT remains literal. Convention
+reference: [paroles documentation](https://github.com/Clarkkkk/paroles); no dependency
+or source code was copied. UI smoke uses synthetic LRC/TXT files in its evidence
+directory to test a tag after the timed line, positive/manual-offset lookup and
+TXT reset/preservation. Parser checks cover positive/negative/zero/boundary and
+malformed/out-of-range tags. Release/CTest passed 3/3 and full verification passed
+in `build/evidence-20260908-221953`. This is lyric synchronization, not audio-latency
+compensation or listening acceptance.
+
 Session recovery follow-up (2026-09-08): restoration and last-good backup eligibility
 now share an exact numeric version-1 check, instead of integer coercion or accepting
 any JSON object. Startup considers the backup even when the primary file is missing
