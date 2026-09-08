@@ -486,6 +486,13 @@ std::string NativeWasapi::open(const BackendConfiguration& config, BackendCallba
     impl->discontinuities = 0;
     impl->starvations = 0;
     impl->paused = false;
+    if (!callbacks.prepare || !callbacks.process || !std::isfinite(config.sampleRate) ||
+        config.sampleRate < 8000 || config.sampleRate > 192000 || config.periodFrames < 1 ||
+        config.periodFrames > 32768 || config.input.empty() || config.output.empty())
+    {
+        impl->error = uint32_t(E_INVALIDARG);
+        return "Native WASAPI requires endpoints, prepare/process callbacks, 8-192 kHz and 1-32768 frames";
+    }
     ResetEvent(impl->stop.value);
     std::promise<std::string> ready;
     auto result = ready.get_future();
