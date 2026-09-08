@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <vector>
+#include "audio/ParametricEQ.h"
 
 namespace canto
 {
@@ -52,6 +53,7 @@ template <class T, size_t N> class Ring
 };
 struct Parameters
 {
+    std::array<EqBandParameters, 3> eqBands;
     std::atomic<bool> transparent{false};
     std::atomic<float> inputBoostDb{0.f};
     std::atomic<float> mic{0.7f}, music{0.65f}, master{0.5f}, echo{0.18f}, feedback{0.25f}, delayMs{180.f},
@@ -62,6 +64,7 @@ struct Parameters
 };
 class VocalDSP
 {
+    ParametricEQ parametric;
     std::vector<float> delay;
     std::array<std::vector<float>, 4> room;
     std::array<size_t, 4> roomPos{};
@@ -79,6 +82,7 @@ class VocalDSP
     void prepare(double sr)
     {
         rate = sr;
+        parametric.prepare(sr);
         delay.assign(size_t(sr * 0.8) + 1, 0);
         const double times[] = {0.0297, 0.0371, 0.0411, 0.0437};
         for (size_t i = 0; i < 4; ++i)
@@ -121,6 +125,7 @@ class VocalDSP
         low += toneCoefficient * (v - low);
         toneGain += 0.001f * ((p.eq.load() ? p.tone.load() : 0.f) - toneGain);
         v += (v - low) * toneGain;
+        v = parametric.process(v, p.eqBands, p.eq.load());
         float targetComp = 1;
         if (p.compressor.load())
         {

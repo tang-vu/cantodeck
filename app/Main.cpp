@@ -1,6 +1,7 @@
 #include "engine/AudioEngine.h"
 #include <juce_gui_extra/juce_gui_extra.h>
 #include "Offline.h"
+#include "EqPanel.h"
 #include <future>
 
 using namespace juce;
@@ -10,7 +11,7 @@ class Console final : public Component, private Timer
     LookAndFeel_V4 theme;
     ComboBox input, output, preset, channel, sampleRate, buffer, queue;
     TextButton connect, refresh, monitor, mute, load, play, record, lyricsButton, advanced, language, test,
-        importButton, exportButton, diagnosticButton, fullLyrics, measureLatency;
+        importButton, exportButton, diagnosticButton, fullLyrics, measureLatency, eqEditor;
     ToggleButton stems, gate, compressor, eq, effects, musicMute, lowLatency, nativeBackend, transparent;
     Slider mic, boost, music, master, echo, reverb, delay, feedback, tone, threshold, position, offset;
     Label title, status, meters, lyrics, trackLabel;
@@ -18,6 +19,7 @@ class Console final : public Component, private Timer
     std::unique_ptr<FileChooser> chooser;
     std::vector<File> tracks;
     std::unique_ptr<DocumentWindow> lyricWindow;
+    std::unique_ptr<EqWindow> eqWindow;
     Label* bigLyric = nullptr;
     std::future<String> trackLoad;
     std::future<canto::LatencyResult> latencyAnalysis;
@@ -126,6 +128,16 @@ class Console final : public Component, private Timer
         o->setProperty("eq", eq.getToggleState());
         o->setProperty("effects", effects.getToggleState());
         o->setProperty("transparent", transparent.getToggleState());
+        Array<var> bands;
+        for (const auto& band : engine.params.eqBands)
+        {
+            auto* values = new DynamicObject();
+            values->setProperty("frequency", band.frequency.load());
+            values->setProperty("gainDb", band.gainDb.load());
+            values->setProperty("q", band.q.load());
+            bands.add(var(values));
+        }
+        o->setProperty("eqBands", var(bands));
         return var(o);
     }
     bool restore(const var& v, bool devices)
@@ -152,6 +164,25 @@ class Console final : public Component, private Timer
                 item.first->setToggleState(bool(v[item.second]), sendNotificationSync);
         if (v.hasProperty("transparent"))
             transparent.setToggleState(bool(v["transparent"]), sendNotificationSync);
+        for (auto& band : engine.params.eqBands)
+        {
+            band.frequency = 1000;
+            band.gainDb = 0;
+            band.q = 0.707f;
+        }
+        if (auto* bands = v["eqBands"].getArray())
+            for (int i = 0; i < std::min(3, bands->size()); ++i)
+            {
+                auto assign = [&](const char* name, std::atomic<float>& target, float low, float high)
+                {
+                    auto value = (*bands)[i][name];
+                    if ((value.isDouble() || value.isInt()) && std::isfinite(double(value)))
+                        target = jlimit(low, high, float(value));
+                };
+                assign("frequency", engine.params.eqBands[size_t(i)].frequency, 40, 16000);
+                assign("gainDb", engine.params.eqBands[size_t(i)].gainDb, -12, 12);
+                assign("q", engine.params.eqBands[size_t(i)].q, 0.2f, 8);
+            }
         if (devices)
         {
             savedInputId = v["inputId"].toString();
@@ -249,7 +280,7 @@ class Console final : public Component, private Timer
         stems.setButtonText(tr("Thu thêm giọng dry / wet", "Separate dry / wet WAV"));
         gate.setButtonText("Expander");
         compressor.setButtonText("Compressor");
-        eq.setButtonText("Tone EQ");
+        eq.setButtonText("Vocal EQ");
         effects.setButtonText("Echo / Room");
         musicMute.setButtonText(tr("Tắt nhạc", "Mute music"));
         repaint();
@@ -292,6 +323,15 @@ class Console final : public Component, private Timer
         transparent.setTooltip("Bypass all vocal coloration and effects; software gain remains. Use this to "
                                "judge monitoring latency and transparency.");
         addAndMakeVisible(measureLatency);
+        addAndMakeVisible(eqEditor);
+        eqEditor.setButtonText("EQ 3 bands");
+        eqEditor.onClick = [this]
+        {
+            if (!eqWindow)
+                eqWindow = std::make_unique<EqWindow>(engine.params);
+            eqWindow->setVisible(true);
+            eqWindow->toFront(true);
+        };
         measureLatency.setTooltip("Plays a quiet short probe and measures speaker-to-microphone return. "
                                   "Pause YouTube first. Includes acoustic travel and device queues; mic "
                                   "audio stays in RAM. Monitoring stays off afterward.");
@@ -319,6 +359,8 @@ class Console final : public Component, private Timer
         preset.onChange = [this]
         {
             int p = preset.getSelectedId();
+            for (auto& band : engine.params.eqBands)
+                band.gainDb = 0;
             echo.setValue(p == 6 ? 0 : p == 5 ? 0.03 : 0.18);
             reverb.setValue(p == 6 ? 0 : p == 4 ? 0.22 : 0.1);
             tone.setValue(p == 2 ? -0.35 : p == 3 ? 0.4 : 0);
@@ -551,6 +593,7 @@ class Console final : public Component, private Timer
         if (latencyAnalysis.valid())
             latencyAnalysis.wait();
         lyricWindow.reset();
+        eqWindow.reset();
         engine.close();
         save();
         setLookAndFeel(nullptr);
@@ -560,6 +603,22 @@ class Console final : public Component, private Timer
         showAdvanced = true;
         resized();
         details.setText(engine.diagnostics(), false);
+    }
+    bool smokeEq(const File& file)
+    {
+        engine.params.eqBands[1].frequency = 2300;
+        engine.params.eqBands[1].gainDb = -3;
+        engine.params.eqBands[1].q = 1.2f;
+        const auto saved = JSON::parse(JSON::toString(state()));
+        engine.params.eqBands[1].gainDb = 0;
+        if (!restore(saved, false) || engine.params.eqBands[1].frequency != 2300 ||
+            engine.params.eqBands[1].gainDb != -3 || std::abs(engine.params.eqBands[1].q - 1.2f) > 0.0001f)
+            return false;
+        EqPanel panel(engine.params);
+        if (file.exists())
+            return false;
+        auto stream = file.createOutputStream();
+        return stream && PNGImageFormat().writeImageToStream(panel.createComponentSnapshot(panel.getLocalBounds()), *stream);
     }
     void paint(Graphics& g) override
     {
@@ -619,7 +678,7 @@ class Console final : public Component, private Timer
         for (auto* c : std::initializer_list<Component*>{
                  &channel, &sampleRate, &buffer, &lowLatency, &nativeBackend, &delay, &feedback, &tone,
                  &threshold, &gate, &compressor, &eq, &effects, &details, &importButton, &exportButton,
-                 &diagnosticButton, &measureLatency, &offset})
+                 &diagnosticButton, &measureLatency, &eqEditor, &offset})
             c->setVisible(showAdvanced);
         if (showAdvanced)
         {
@@ -637,6 +696,7 @@ class Console final : public Component, private Timer
             exportButton.setBounds(row.removeFromLeft(130).reduced(3));
             diagnosticButton.setBounds(row.removeFromLeft(140).reduced(3));
             measureLatency.setBounds(row.removeFromLeft(185).reduced(3));
+            eqEditor.setBounds(row.removeFromLeft(115).reduced(3));
             offset.setBounds(row.reduced(8));
             details.setBounds(r.removeFromBottom(140));
         }
@@ -819,6 +879,9 @@ class CantoDeckApp final : public JUCEApplication
                                 content->createComponentSnapshot(content->getLocalBounds()), *advancedStream))
                             setApplicationReturnValue(4);
                     }
+                    if (!static_cast<Console*>(content)->smokeEq(
+                            f.getSiblingFile(f.getFileNameWithoutExtension() + "-eq.png")))
+                        setApplicationReturnValue(4);
                     quit();
                 });
             return;

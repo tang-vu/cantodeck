@@ -34,6 +34,8 @@ Nếu hú, nhấn **TẮT TẤT CẢ**, giảm âm lượng loa, đưa mic xa v�
 
 ## Khi không có tiếng
 
+Trong **Nâng cao → EQ 3 bands**, mỗi dải có Frequency (tần số), Gain (tăng/giảm dB) và Q (Q càng cao, dải càng hẹp). Muốn nghe tác dụng, tắt **Giọng gốc** và bật **Vocal EQ**. Các dải mặc định 0 dB; đổi preset có sẵn sẽ đưa gain EQ về 0. Thông số được lưu cùng preset/session. Tăng dB có thể làm lớn tiếng nền hoặc gây hú; EQ này không tự chống hú và chưa được đánh giá nghe hát trên bộ loa của bạn.
+
 Nếu mic nhỏ: bản mới có **Mic boost dB** ngay trên màn hình chính. Thử +6 dB, rồi +12 dB nếu cần; thanh Mic có thể tăng tới 8 lần. Tăng từng chút khi dùng tai nghe, vì gain phần mềm cũng tăng tiếng nền. Mức MIC hiển thị vẫn là tín hiệu thô trước boost; nhìn MASTER để thấy thay đổi sau xử lý. Master 0,5 giảm biên độ đầu ra một nửa. Có thể thử tắt Expander trong Nâng cao khi tín hiệu đầu vào quá nhỏ. CantoDeck không tự thay đổi âm lượng đầu vào Windows hay gain vật lý của mic.
 
 - MIC không nhúc nhích: kiểm tra mic, dây, quyền Windows, channel 1/2 trong Nâng cao và gain phần cứng.

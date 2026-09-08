@@ -63,6 +63,67 @@ int main(int argc, char** argv)
         }
         for (double sr : {44100., 48000.})
         {
+            auto eqResponse = [&](float frequency, float gain, float q, int activeBands, double testFrequency)
+            {
+                canto::ParametricEQ filter;
+                filter.prepare(sr);
+                std::array<canto::EqBandParameters, 3> bands;
+                for (int i = 0; i < 3; ++i)
+                {
+                    bands[size_t(i)].frequency = frequency;
+                    bands[size_t(i)].gainDb = i < activeBands ? gain : 0;
+                    bands[size_t(i)].q = q;
+                }
+                double inEnergy = 0, outEnergy = 0;
+                for (int i = 0; i < int(sr); ++i)
+                {
+                    const float input = float(0.01 * std::sin(2 * 3.141592653589793 * testFrequency * i / sr));
+                    const float output = filter.process(input, bands, true);
+                    check(std::isfinite(output), "parametric EQ finite response");
+                    if (i > sr / 2)
+                    {
+                        inEnergy += double(input) * input;
+                        outEnergy += double(output) * output;
+                    }
+                }
+                return 10 * std::log10(outEnergy / inEnergy);
+            };
+            for (float center : {120.f, 1200.f, 6500.f})
+                for (float gain : {-12.f, -6.f, 0.f, 6.f, 12.f})
+                    check(std::abs(eqResponse(center, gain, 0.707f, 1, center) - gain) < 0.08,
+                          "parametric EQ measured center gain matches requested dB");
+            check(std::abs(eqResponse(1000, 6, 1, 3, 1000) - 18) < 0.08,
+                  "three parametric bands are serial and independently active");
+            check(eqResponse(1000, 12, 8, 1, 1400) < eqResponse(1000, 12, 0.5f, 1, 1400) - 5,
+                  "parametric Q controls bandwidth");
+            {
+                canto::ParametricEQ filter;
+                filter.prepare(sr);
+                std::array<canto::EqBandParameters, 3> bands;
+                for (auto& band : bands)
+                    band.gainDb = 12;
+                for (int i = 0; i < int(sr); ++i)
+                    filter.process(0.01f, bands, true);
+                for (int i = 0; i < int(sr); ++i)
+                {
+                    const float input = float(0.01 * std::sin(i * 0.11));
+                    const float output = filter.process(input, bands, false);
+                    if (i > sr / 2)
+                        check(std::abs(input - output) < 1.e-6f, "parametric bypass settles at unity");
+                }
+                for (int i = 0; i < int(sr * 2); ++i)
+                {
+                    auto& band = bands[size_t(i % 3)];
+                    band.frequency = i % 2 ? 40.f : 16000.f;
+                    band.q = i % 2 ? 0.2f : 8.f;
+                    band.gainDb = i % 2 ? -12.f : 12.f;
+                    if (i % 101 == 0)
+                        band.frequency = std::numeric_limits<float>::quiet_NaN();
+                    const float output = filter.process(i % 2 ? -0.01f : 0.01f, bands, true);
+                    check(std::isfinite(output) && std::abs(output) < 1,
+                          "parametric automation stays finite and bounded for weak input");
+                }
+            }
             canto::LatencyProbe probe;
             probe.prepare(sr);
             check(probe.begin(), "prepared measurement starts");
@@ -166,6 +227,35 @@ int main(int argc, char** argv)
                           "transparent path preserves dry waveform without sample delay");
             }
             canto::Parameters p;
+            {
+                canto::Parameters flatParameters, boostedParameters;
+                for (auto* parameters : {&flatParameters, &boostedParameters})
+                {
+                    parameters->gate = false;
+                    parameters->compressor = false;
+                    parameters->effects = false;
+                    parameters->mic = 1;
+                }
+                boostedParameters.eqBands[0].frequency = 1000;
+                boostedParameters.eqBands[0].gainDb = 6;
+                canto::VocalDSP flatVoice, boostedVoice;
+                flatVoice.prepare(sr);
+                boostedVoice.prepare(sr);
+                double flatEnergy = 0, boostedEnergy = 0;
+                for (int i = 0; i < int(sr); ++i)
+                {
+                    const float input = float(0.01 * std::sin(2 * 3.141592653589793 * 1000 * i / sr));
+                    const float flat = flatVoice.process(input, flatParameters);
+                    const float boosted = boostedVoice.process(input, boostedParameters);
+                    if (i > sr / 2)
+                    {
+                        flatEnergy += double(flat) * flat;
+                        boostedEnergy += double(boosted) * boosted;
+                    }
+                }
+                check(std::abs(10 * std::log10(boostedEnergy / flatEnergy) - 6) < 0.08,
+                      "parametric EQ is connected to the actual vocal DSP chain");
+            }
             {
                 // DC separates the high-passed and transparent paths, exposing
                 // an abrupt bypass switch without waveform-slope ambiguity.
