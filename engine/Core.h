@@ -173,10 +173,27 @@ class ClockBridge
     std::array<float, taps> history{};
     std::vector<std::array<float, taps>> kernel;
     bool primed = false;
-    size_t target = 1024;
+    size_t target = 1024, recoveryThreshold = 4096;
+    int rampFrames = 240, rampRemaining = 0;
+    float lastOutput = 0, rampFrom = 0;
+    void transition() noexcept
+    {
+        rampFrom = lastOutput;
+        rampRemaining = rampFrames;
+    }
+    float emit(float value) noexcept
+    {
+        if (rampRemaining > 0)
+        {
+            const float blend = float(--rampRemaining) / float(rampFrames);
+            value = value * (1.f - blend) + rampFrom * blend;
+        }
+        lastOutput = clean(value);
+        return lastOutput;
+    }
 
   public:
-    std::atomic<uint64_t> underruns{0}, overruns{0};
+    std::atomic<uint64_t> underruns{0}, overruns{0}, resyncs{0}, discardedFrames{0};
     std::atomic<double> ratio{1};
     void prepare(double inputRate, double outputRate, int block, bool lowLatency = false, int inputBlock = 0,
                  int outputBlock = 0)
@@ -187,6 +204,9 @@ class ClockBridge
         correction = 1;
         primed = false;
         history = {};
+        lastOutput = rampFrom = 0;
+        rampFrames = std::max(1, int(outputRate * 0.005));
+        rampRemaining = 0;
         kernel.resize(phases + 1);
         constexpr double pi = 3.14159265358979323846;
         const double cutoff = nominal > 1 ? 0.96 / nominal : 1.0;
@@ -210,8 +230,12 @@ class ClockBridge
         const auto lowTarget = size_t(std::ceil(renderQuantum * nominal)) + size_t(captureQuantum) + 16;
         target = std::clamp(lowLatency ? lowTarget : size_t(block * 3), size_t(lowLatency ? 128 : 512),
                             size_t(8192));
+        recoveryThreshold = std::min(size_t(32767), target +
+            std::max(size_t(1024), size_t(std::max(captureQuantum, renderQuantum)) * 4));
         underruns = 0;
         overruns = 0;
+        resyncs = 0;
+        discardedFrames = 0;
     }
     void push(float v) noexcept
     {
@@ -220,6 +244,23 @@ class ClockBridge
     }
     void beginBlock() noexcept
     {
+        // A stalled output must not replay up to an entire FIFO of old speech.
+        // Only the consumer discards; never reset shared indices while capture runs.
+        const auto queued = fifo.size();
+        if (queued > recoveryThreshold)
+        {
+            float unused = 0;
+            size_t dropped = 0;
+            const auto excess = std::min(queued - target, size_t(32768));
+            while (dropped < excess && fifo.pop(unused))
+                ++dropped;
+            discardedFrames.fetch_add(dropped);
+            ++resyncs;
+            primed = false;
+            history = {};
+            phase = 0;
+            transition();
+        }
         // A direct proportional occupancy controller is monotonic under constant
         // drift. The former extra multi-second low-pass produced underdamped
         // queue oscillations and forced larger prebuffers.
@@ -232,11 +273,12 @@ class ClockBridge
         if (!primed)
         {
             if (fifo.size() < target)
-                return 0;
+                return emit(0);
             history = {};
             for (size_t i = 15; i < taps; ++i)
                 fifo.pop(history[i]);
             primed = true;
+            transition();
         }
         const auto p = std::min(size_t(phase * phases), phases);
         float result = 0;
@@ -254,10 +296,11 @@ class ClockBridge
                 primed = false;
                 history = {};
                 phase = 0;
-                return 0;
+                transition();
+                return emit(0);
             }
         }
-        return result;
+        return emit(result);
     }
     size_t buffered() const { return fifo.size(); }
     size_t targetFrames() const { return target; }

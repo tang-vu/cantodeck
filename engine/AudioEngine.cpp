@@ -445,6 +445,8 @@ juce::String AudioEngine::diagnostics() const
          "; ratio: " + juce::String(bridge.ratio.load(), 6) +
          "; under/over: " + juce::String(bridge.underruns.load()) + " / " +
          juce::String(bridge.overruns.load()) +
+         "; resyncs/discarded input frames: " + juce::String(bridge.resyncs.load()) + " / " +
+         juce::String(bridge.discardedFrames.load()) +
          "\nCallback load: " + juce::String(callbackLoad.load() * 100, 1) +
          "%; limited samples: " + juce::String(clipped.load()) +
          "; limiter gain: " + juce::String(limiterGain.load(), 3) +

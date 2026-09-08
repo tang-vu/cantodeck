@@ -243,6 +243,56 @@ int main(int argc, char** argv)
             const double boostRatio = std::sqrt(b / a);
             check(boostRatio > 3.95 && boostRatio < 4.02, "weak mic +12 dB gain regression");
         }
+        {
+            canto::ClockBridge bridge;
+            bridge.prepare(48000, 48000, 128, true);
+            for (int i = 0; i < 32768 + 100; ++i)
+                bridge.push(0.2f);
+            check(bridge.overruns == 100, "capture overflow is counted");
+            bridge.beginBlock();
+            check(bridge.buffered() == bridge.targetFrames() && bridge.resyncs == 1 &&
+                      bridge.discardedFrames == 32768 - bridge.targetFrames(),
+                  "stalled output discards stale backlog to the live target");
+            float previous = 0;
+            for (int block = 0; block < 20; ++block)
+            {
+                if (block > 0)
+                    for (int i = 0; i < 128; ++i)
+                        bridge.push(0.2f);
+                bridge.beginBlock();
+                for (int i = 0; i < 128; ++i)
+                {
+                    float value = bridge.next();
+                    check(std::abs(value - previous) < 0.01f, "recovery/startup ramps avoid a DC step");
+                    previous = value;
+                }
+            }
+            check(std::abs(previous - 0.2f) < 0.00001f, "recovery reaches live input");
+            for (int block = 0; block < 20; ++block)
+            {
+                bridge.beginBlock();
+                for (int i = 0; i < 128; ++i)
+                {
+                    float value = bridge.next();
+                    check(std::abs(value - previous) < 0.01f, "source loss fades rather than stepping");
+                    previous = value;
+                }
+            }
+            check(previous == 0 && bridge.underruns > 0, "source loss settles at silence");
+            for (int block = 0; block < 20; ++block)
+            {
+                for (int i = 0; i < 128; ++i)
+                    bridge.push(-0.3f);
+                bridge.beginBlock();
+                for (int i = 0; i < 128; ++i)
+                {
+                    const float value = bridge.next();
+                    check(std::abs(value - previous) < 0.01f, "resumed source fades in without stale history");
+                    previous = value;
+                }
+            }
+            check(std::abs(previous + 0.3f) < 0.00001f, "resumed source reaches new input");
+        }
         for (bool lowLatency : {false, true})
             for (double drift : {-0.001, 0.001})
             {
@@ -261,7 +311,8 @@ int main(int argc, char** argv)
                     for (int i = 0; i < 256; i++)
                         check(std::isfinite(bridge.next()), "resampler finite");
                 }
-                check(bridge.overruns == 0 && bridge.underruns == 0, "clock drift stability");
+                check(bridge.overruns == 0 && bridge.underruns == 0 && bridge.resyncs == 0,
+                      "clock drift stability without dropping audio");
                 check(bridge.buffered() < 2000, "clock queue bounded");
                 for (int b = 0; b < 100; b++)
                 {
@@ -293,7 +344,8 @@ int main(int argc, char** argv)
                         check(std::abs(v - 0.2f) < 1.e-5f, "mixed-rate resampling and arbitrary blocks");
                 }
             }
-            check(bridge.overruns == 0 && bridge.underruns == 0, "mixed sample rate stability");
+            check(bridge.overruns == 0 && bridge.underruns == 0 && bridge.resyncs == 0,
+                  "mixed sample rate stability without dropping audio");
         }
         for (double drift : {-0.001, 0.001})
         {
@@ -313,7 +365,7 @@ int main(int argc, char** argv)
                 for (int i = 0; i < 480; i++)
                     check(std::isfinite(bridge.next()), "asymmetric low-latency output finite");
             }
-            check(bridge.overruns == 0 && bridge.underruns == 0,
+            check(bridge.overruns == 0 && bridge.underruns == 0 && bridge.resyncs == 0,
                   "128-in/480-out low-latency drift stability");
         }
         {
