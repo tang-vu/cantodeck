@@ -3,6 +3,7 @@
 #include "audio/AudioBackend.h"
 #include "audio/LatencyProbe.h"
 #include "audio/WavStream.h"
+#include "audio/MonitoringStopPolicy.h"
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <thread>
 
@@ -36,6 +37,7 @@ class Recorder
 };
 class AudioEngine : private juce::AudioIODeviceType::Listener
 {
+    MonitoringStopPolicy stopPolicy;
     struct Callback : juce::AudioIODeviceCallback
     {
         AudioEngine& owner;
@@ -50,7 +52,11 @@ class AudioEngine : private juce::AudioIODeviceType::Listener
                 owner.fault = true;
             }
         }
-        void audioDeviceStopped() override { owner.params.monitor = false; }
+        void audioDeviceStopped() override
+        {
+            if (owner.stopPolicy.mustMute(input))
+                owner.params.monitor = false;
+        }
         void audioDeviceError(const juce::String&) override
         {
             owner.params.monitor = false;

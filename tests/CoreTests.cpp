@@ -1,11 +1,13 @@
 #include "engine/Core.h"
 #include "engine/audio/LatencyProbe.h"
 #include "engine/audio/ServiceIntervals.h"
+#include "engine/audio/MonitoringStopPolicy.h"
 #include <iostream>
 #include <stdexcept>
 #include <limits>
 #include <fstream>
 #include <string>
+#include <thread>
 void check(bool v, const char* message)
 {
     if (!v)
@@ -47,6 +49,29 @@ int main(int argc, char** argv)
             return file ? 0 : 1;
         }
         canto::Ring<int, 4> q;
+        {
+            canto::MonitoringStopPolicy policy;
+            check(policy.mustMute(true) && policy.mustMute(false), "unexpected endpoint stops always mute");
+            {
+                canto::MonitoringStopPolicy::OutputSuspension suspension(policy);
+                check(!policy.mustMute(false), "explicit output callback pause preserves monitor intent");
+                check(policy.mustMute(true), "input loss still mutes during explicit output pause");
+                bool otherThreadMuted = false;
+                std::thread unexpectedStop([&] { otherThreadMuted = policy.mustMute(false); });
+                unexpectedStop.join();
+                check(otherThreadMuted, "concurrent stop on another thread is never suppressed");
+                canto::MonitoringStopPolicy anotherEngine;
+                check(anotherEngine.mustMute(false), "stop suppression applies only to its engine");
+            }
+            check(policy.mustMute(false), "output stop suppression ends with control scope");
+            try
+            {
+                canto::MonitoringStopPolicy::OutputSuspension suspension(policy);
+                throw std::runtime_error("synthetic control failure");
+            }
+            catch (const std::runtime_error&) {}
+            check(policy.mustMute(false), "stop policy restores safety after exception");
+        }
         canto::ServiceIntervals intervals;
         intervals.observe(0);
         check(intervals.maxTicks() == 0, "first service tick has no interval");

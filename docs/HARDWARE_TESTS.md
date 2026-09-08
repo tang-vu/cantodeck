@@ -14,6 +14,14 @@ For each row: date, OS build, endpoint manufacturer/model, driver version, backe
 UI checks: no devices, denied mic permission, unavailable saved device, channel 2 absent, paused/end-of-track, clipping, Vietnamese filenames/LRC, long plain text, 100/150/200% DPI, keyboard focus and fullscreen lyrics. Long lyrics may overflow the label; scrolling plain-text lyrics remains incomplete.
 # Optional native lifecycle diagnostic
 
+The separate compatibility-control check is explicit and excluded from CI:
+
+```powershell
+Start-Process ./build/CantoDeck_artefacts/Release/CantoDeck.exe -WindowStyle Hidden -Wait -ArgumentList '--test-compat-control "build/evidence-REPLACE/input.wav" "build/compat-control.txt"'
+```
+
+Use an existing generated synthetic WAV fixture and a new report name. This opens the first enumerated input/output, sets MUTE ALL before connecting and never clears it, checks monitor-intent preservation around internal callback pauses, and closes again. It starts neither recording nor test tones. Check endpoint names in its report before assigning hardware coverage. It does not measure RTT or test actual unplug/replug.
+
 After building, explicitly run the following to open the selected endpoints with silent output, test three open/pause/resume/close cycles, and print observations. Captured samples are not inspected or saved. Use endpoint names present on your machine. This is not a listening, physical unplug or latency test. It does not change Windows audio defaults.
 
 ```powershell

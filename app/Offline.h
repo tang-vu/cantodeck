@@ -60,6 +60,39 @@ inline int runOffline(const juce::String& args)
         }
         return destination.replaceWithText(report) ? resultCode : 4;
     }
+    if (tokens[0] == "--test-compat-control" && tokens.size() == 3)
+    {
+        // Explicit hardware control test: mute is set before opening streams
+        // and never cleared. No recorder is started or audio saved.
+        engine.params.mute = true;
+        const auto inputs = engine.inputs(), outputs = engine.outputs();
+        if (inputs.isEmpty() || outputs.isEmpty())
+            return 30;
+        const auto openError = engine.connect(inputs[0], outputs[0], 48000, 512, false, false);
+        if (openError.isNotEmpty())
+            return 31;
+        engine.params.monitor = true; // Intent only; MUTE ALL stays true throughout.
+        const auto loadError = engine.loadTrack(File::getCurrentWorkingDirectory().getChildFile(tokens[1]));
+        if (loadError.isNotEmpty() || !engine.params.monitor.load() || !engine.params.mute.load())
+            return 32;
+        engine.stopRecording(); // Exercises output suspension; no recording exists.
+        if (!engine.params.monitor.load() || !engine.params.mute.load())
+            return 33;
+        engine.params.monitor = false;
+        engine.stopRecording();
+        if (engine.params.monitor.load() || !engine.params.mute.load())
+            return 34;
+        Thread::sleep(100);
+        const auto report = "PASS: JUCE output control pauses preserve monitor intent without re-enabling it; "
+            "MUTE ALL remained on, no recording or tones.\nSelected input: " + inputs[0] +
+            "\nSelected output: " + outputs[0] + "\n" + engine.diagnostics();
+        if (engine.outputPeak.load() != 0 || !engine.connected())
+            return 35;
+        engine.close();
+        if (engine.params.monitor.load() || engine.connected())
+            return 36;
+        return destination.replaceWithText(report) ? 0 : 4;
+    }
     if (tokens[0] == "--test-playback" && tokens.size() == 3)
     {
         engine.prepareOffline(48000);

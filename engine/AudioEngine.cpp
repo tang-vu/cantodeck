@@ -163,7 +163,12 @@ void AudioEngine::suspendOutput()
     if (native)
         native->pause(true);
     else if (output)
+    {
+        // Pinned JUCE WASAPI stop() invokes audioDeviceStopped synchronously.
+        // Do not treat our temporary callback suspension as device loss.
+        MonitoringStopPolicy::OutputSuspension expected(stopPolicy);
         output->stop();
+    }
 }
 void AudioEngine::resumeOutput()
 {
@@ -398,22 +403,19 @@ juce::String AudioEngine::record(const juce::File& file, bool stems)
 {
     if (!connected())
         return "Connect audio first";
-    bool monitoring = params.monitor.load();
     suspendOutput();
     auto e = recorder.start(file, rate, stems);
     resumeOutput();
-    params.monitor = monitoring && !fault.load();
     return e;
 }
 void AudioEngine::stopRecording()
 {
-    bool was = transportRunning(), monitoring = params.monitor.load();
+    bool was = transportRunning();
     if (was)
         suspendOutput();
     recorder.stop();
     if (was)
         resumeOutput();
-    params.monitor = monitoring && !fault.load();
 }
 juce::String AudioEngine::diagnostics() const
 {
