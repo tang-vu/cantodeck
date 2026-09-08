@@ -52,6 +52,41 @@ The goal remains the full project specification and comfortable live singing thr
 
 ## Remaining acceptance work
 
+Independent callback scheduling and bounded reserve (2026-09-08): a new event-driven
+test separates capture/render delivery, rather than batching capture ahead of every
+render. It covers 72 schedules at 48/48, 44.1/48 and 48/44.1 kHz, 128/128, 128/480,
+480/128 and 480/480 periods, +/-1000 ppm drift and three relative phases, for 20
+simulated seconds each. A second run adds sinusoidal delivery jitter of +/-0.2
+periods to both endpoints. The original small fixed target incurred 10 underruns
+in the 48 kHz, 128/480, -1000 ppm, zero-phase jitter case. This is synthetic
+scheduling evidence, not a claim about the cause of the owner's reported delay.
+
+The low-latency bridge now retains its original startup target but grows by a
+quarter of the summed input/output quanta (converted to input frames, minimum 32)
+on a real underrun, at most twice, total target <=8192. Only the consumer updates
+the atomic target; reconnect resets it; compatibility mode stays fixed. This
+deliberately adds bounded latency only after the smaller target fails. It cannot
+prevent the triggering interruption or guarantee arbitrary scheduling tolerance.
+For 128/480 at 48 kHz the first step is 152 input frames (3.17 ms of extra target
+buffering, not measured RTT).
+
+With reserve adaptation, the jitter matrix passed with 18 total underruns across
+72 cases, maximum one per case; the no-jitter matrix had zero. The test requires
+steady DC recovery at callback checks after 100 ms from an underrun and at least
+18.5 seconds of checked output per 20-second case; zero overflows/resyncs, bounded
+queue, and exact reserve growth. Separate forced-starvation tests exercise both
+growth steps, cap, compatibility invariance and reconnect reset. Release/CTest
+passed 5/5, full offline/UI verification passed (`build/evidence-20260908-222714`),
+and the final added cap/reset checks passed both scheduling modes separately.
+
+A 30-second silent native Realtek mic-array/headphones run completed with exit 0
+(`build/native-reserve-20260908-222748.txt`): 48 kHz, 480/480 engine periods, output
+queue target 528, FIFO target unchanged at 1024; 3000/3000 packets/callbacks; zero
+FIFO under/overruns, resyncs, timestamp errors and empty-output observations; one
+first-packet discontinuity, final HRESULT 0. Max service intervals 11.07/12.20 ms
+are not RTT. The reserve did not activate in that hardware run, so it does not
+validate audible recovery. DGM20/external-speaker acceptance remains open.
+
 LRC file-offset support (2026-09-08): signed integer `[offset:...]` metadata now
 adds milliseconds to the lyric lookup clock (positive means earlier), independently
 of the manual slider and audio path. At most six digits, magnitude <=600000 ms;

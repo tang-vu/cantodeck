@@ -211,7 +211,8 @@ class ClockBridge
     std::array<float, taps> history{};
     std::vector<std::array<float, taps>> kernel;
     bool primed = false;
-    size_t target = 1024, recoveryThreshold = 4096;
+    std::atomic<size_t> target{1024};
+    size_t maximumTarget = 1024, adaptiveStep = 0, recoveryThreshold = 4096;
     int rampFrames = 240, rampRemaining = 0;
     float lastOutput = 0, rampFrom = 0;
     void transition() noexcept
@@ -268,6 +269,9 @@ class ClockBridge
         const auto lowTarget = size_t(std::ceil(renderQuantum * nominal)) + size_t(captureQuantum) + 16;
         target = std::clamp(lowLatency ? lowTarget : size_t(block * 3), size_t(lowLatency ? 128 : 512),
                             size_t(8192));
+        adaptiveStep = lowLatency ? std::max(size_t(32), (size_t(captureQuantum) +
+                       size_t(std::ceil(renderQuantum * nominal))) / 4) : 0;
+        maximumTarget = std::min(size_t(8192), target.load() + adaptiveStep * 2);
         recoveryThreshold = std::min(size_t(32767), target +
             std::max(size_t(1024), size_t(std::max(captureQuantum, renderQuantum)) * 4));
         underruns = 0;
@@ -331,6 +335,10 @@ class ClockBridge
             if (!fifo.pop(history.back()))
             {
                 ++underruns;
+                // Preserve the smallest startup target. If actual delivery cannot
+                // sustain it, add bounded jitter reserve on the consumer only.
+                // Never shrink automatically and oscillate between buffer sizes.
+                target = std::min(maximumTarget, target.load() + adaptiveStep);
                 primed = false;
                 history = {};
                 phase = 0;

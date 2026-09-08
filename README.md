@@ -31,6 +31,15 @@ The main view has mic/music/master gain, meters, six editable vocal presets, ech
 
 ## Audio and recording semantics
 
+The low-latency bridge (also used by the native backend) starts with its existing small FIFO target. After an actual FIFO
+underrun it adds a bounded jitter reserve: one quarter of the summed capture quantum
+and output quantum converted to input frames (minimum 32 frames), at most twice,
+with the total target capped at 8192 frames. The current target is shown in diagnostics.
+It resets on reconnect and never shrinks automatically during a connection. This
+trades extra buffering for recovery when delivery is irregular; the triggering
+underrun can still be audible. Compatibility mode retains its fixed target.
+It is not a guarantee against scheduling gaps or a measured latency claim.
+
 LRC `[offset:+500]` adjusts lyric lookup by milliseconds: positive values show lyrics
 earlier, negative values later. It adds to the manual lyric offset and does not alter
 audio timing. Signed integers with at most six digits and magnitude at most 600000 ms
