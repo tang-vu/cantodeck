@@ -1,5 +1,17 @@
 # Architecture decisions
 
+## Current amendments — 2026-09-08
+
+The original ADRs below describe the initial implementation. The following amendments supersede their obsolete backend, clock bridge and device-identity details; [AUDIO_REWORK.md](AUDIO_REWORK.md) tracks verification and remaining limitations.
+
+- An opt-in direct WASAPI adapter services capture/render on one MMCSS thread, alongside the JUCE shared-mode compatibility adapter. It distinguishes engine period, allocated capacity and queued-output target. Neither provides a hard real-time scheduling guarantee.
+- The bridge now uses a 32-tap windowed-sinc phase table with 16-frame lookahead and proportional occupancy correction. Low-latency target is one output quantum converted to input frames plus one capture quantum plus 16 guard samples. Compatibility still targets three blocks.
+- Capture overflow rejects new samples and counts them. If queued input exceeds the recovery threshold, the output-side consumer discards stale queued frames back to target; both resynchronizations and discarded frames are visible. The threshold margin is four negotiated quanta or 1024 frames, whichever is larger. Startup/starvation/recovery have 5 ms amplitude transitions. This loses audio during recovery and is not gapless recording or latency compensation.
+- Windows endpoint IDs are persisted with display-name fallback for older sessions. Monitoring remains explicitly off after connection changes.
+- A transparent vocal path retains gain and bypasses coloration/effects. Switching crossfades correlated dry/processed paths linearly over 5 ms without adding a steady-state delay. Both paths keep advancing to avoid frozen tails. Fixed filter coefficients are calculated during preparation; dB conversions are cached until their parameters change.
+- Output protection is a stereo-linked, zero-lookahead sample-peak limiter, not the earlier clamp, not true-peak limiting, and not acoustic-feedback prevention.
+- The explicit loop-measurement tool emits only on user request and rejects unreliable returns. Synthetic correlation tests do not establish physical round-trip latency.
+
 ## ADR 001 — Native Windows shared-mode audio
 
 C++20, JUCE 8.0.15 pinned at `91ad83ae34a81e0833b1a2b0866f54846370ae53`, CMake, native JUCE UI. The repository initially contained only the master prompt. JUCE's pinned source confirms independent endpoint names and shared WASAPI availability. Two input/output-only devices are opened; no system defaults are changed. ASIO, exclusive mode, loopback and extra codecs are disabled. Core DSP/rings are standard C++; orchestration, WAV codec and UI use JUCE.

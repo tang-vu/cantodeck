@@ -71,7 +71,9 @@ class VocalDSP
     float x1 = 0, y1 = 0, low = 0, envelope = 0, gain = 0, echoGain = 0, roomGain = 0, toneGain = 0,
           compGain = 1;
     double delaySamples = 0;
-    float inputGain = 1.f;
+    float inputGain = 1.f, inputGainTarget = 1.f, cachedBoostDb = 0.f;
+    float cachedThresholdDb = -18.f, thresholdLinear = 0.12589254f;
+    float highPassPole = 0, toneCoefficient = 0, transparentMix = 0, bypassStep = 0;
 
   public:
     void prepare(double sr)
@@ -86,29 +88,51 @@ class VocalDSP
         damping = {};
         delaySamples = 0;
         inputGain = 1;
+        inputGainTarget = 1;
+        cachedBoostDb = 0;
+        cachedThresholdDb = -18;
+        thresholdLinear = std::pow(10.f, cachedThresholdDb / 20.f);
+        highPassPole = float(std::exp(-2 * 3.141592653589793 * 75 / rate));
+        toneCoefficient = float(1 - std::exp(-2 * 3.141592653589793 * 1800 / rate));
+        transparentMix = 0;
+        bypassStep = float(1 / (rate * 0.005));
         x1 = y1 = low = envelope = gain = echoGain = roomGain = toneGain = 0;
         compGain = 1;
     }
     float process(float input, const Parameters& p) noexcept
     {
-        inputGain +=
-            0.001f * (std::pow(10.f, std::clamp(p.inputBoostDb.load(), 0.f, 24.f) / 20.f) - inputGain);
+        const float requestedBoost = p.inputBoostDb.load();
+        const float boostDb = std::isfinite(requestedBoost) ? std::clamp(requestedBoost, 0.f, 24.f) : 0.f;
+        if (boostDb != cachedBoostDb)
+        {
+            cachedBoostDb = boostDb;
+            inputGainTarget = std::pow(10.f, boostDb / 20.f);
+        }
+        inputGain += 0.001f * (inputGainTarget - inputGain);
         const float x = clean(clean(input) * inputGain);
         gain += 0.001f * (p.mic.load() - gain);
-        const float hp = x - x1 + float(std::exp(-2 * 3.141592653589793 * 75 / rate)) * y1;
+        const float hp = x - x1 + highPassPole * y1;
         x1 = x;
         y1 = hp;
         envelope += (std::abs(hp) > envelope ? 0.01f : 0.0002f) * (std::abs(hp) - envelope);
         float v = hp;
         if (p.gate.load())
             v *= std::clamp(envelope / 0.003f, 0.15f, 1.f);
-        low += float(1 - std::exp(-2 * 3.141592653589793 * 1800 / rate)) * (v - low);
+        low += toneCoefficient * (v - low);
         toneGain += 0.001f * ((p.eq.load() ? p.tone.load() : 0.f) - toneGain);
         v += (v - low) * toneGain;
         float targetComp = 1;
         if (p.compressor.load())
         {
-            const float t = std::pow(10.f, p.threshold.load() / 20);
+            const float requestedThreshold = p.threshold.load();
+            const float thresholdDb = std::isfinite(requestedThreshold)
+                                          ? std::clamp(requestedThreshold, -60.f, 0.f) : -18.f;
+            if (thresholdDb != cachedThresholdDb)
+            {
+                cachedThresholdDb = thresholdDb;
+                thresholdLinear = std::pow(10.f, thresholdDb / 20.f);
+            }
+            const float t = thresholdLinear;
             if (envelope > t)
                 targetComp = std::pow(t / envelope, 0.65f);
         }
@@ -136,7 +160,12 @@ class VocalDSP
             roomPos[j] = (roomPos[j] + 1) % room[j].size();
             reverberation += r * 0.25f;
         }
-        return p.transparent.load() ? clean(x * gain) : clean(v + tail * echoGain + reverberation * roomGain);
+        // Linear (not equal-power) crossfade: both paths contain correlated voice.
+        // Keep their states advancing, so bypass changes do not revive frozen tails.
+        const float requestedMix = p.transparent.load() ? 1.f : 0.f;
+        transparentMix += std::clamp(requestedMix - transparentMix, -bypassStep, bypassStep);
+        const float processed = clean(v + tail * echoGain + reverberation * roomGain);
+        return clean(processed * (1.f - transparentMix) + clean(x * gain) * transparentMix);
     }
 };
 // Stereo-linked, zero-lookahead sample-peak limiter. Immediate gain reduction,

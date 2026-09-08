@@ -166,6 +166,38 @@ int main(int argc, char** argv)
                           "transparent path preserves dry waveform without sample delay");
             }
             canto::Parameters p;
+            {
+                // DC separates the high-passed and transparent paths, exposing
+                // an abrupt bypass switch without waveform-slope ambiguity.
+                canto::Parameters switching;
+                switching.mic = 1;
+                switching.effects = false;
+                switching.gate = false;
+                switching.compressor = false;
+                canto::VocalDSP switched;
+                switched.prepare(sr);
+                float previous = 0;
+                for (int i = 0; i < int(sr); ++i)
+                    previous = switched.process(0.25f, switching);
+                for (bool transparentMode : {true, false, true, false})
+                {
+                    switching.transparent = transparentMode;
+                    for (int i = 0; i < int(sr * 0.01); ++i)
+                    {
+                        const float value = switched.process(0.25f, switching);
+                        check(std::abs(value - previous) < 0.002f, "vocal bypass transition is ramped");
+                        previous = value;
+                    }
+                    check(std::abs(previous - (transparentMode ? 0.25f : 0.f)) < 0.00001f,
+                          "vocal bypass reaches exact selected path");
+                }
+                switching.inputBoostDb = std::numeric_limits<float>::quiet_NaN();
+                switching.threshold = std::numeric_limits<float>::infinity();
+                switching.compressor = true;
+                for (int i = 0; i < 1000; ++i)
+                    check(std::isfinite(switched.process(0.1f, switching)),
+                          "invalid gain conversion parameters cannot poison DSP state");
+            }
             canto::VocalDSP dsp;
             dsp.prepare(sr);
             p.feedback = 2;
