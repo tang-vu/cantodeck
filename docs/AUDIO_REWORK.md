@@ -52,6 +52,19 @@ The goal remains the full project specification and comfortable live singing thr
 
 ## Remaining acceptance work
 
+Portable runtime follow-up (2026-09-08): dependency inspection found that earlier
+executables imported `MSVCP140.dll`, `VCRUNTIME140.dll` and `VCRUNTIME140_1.dll`.
+MSVC targets now use the static runtime (`MultiThreaded`, debug variant for Debug).
+The repeatable `scripts/check-runtime.ps1` locates Visual Studio dumpbin, rejects
+external VC runtime imports and writes a hashed import report. Both verify and
+package run this check; the old dynamic executable was correctly rejected.
+The first static build passed Release/CTest 5/5, full offline/UI/WAV verification
+and packaging (`build/evidence-20260908-223657`, initial dirty package
+`dist/CantoDeck-0.1.0-win-x64-20260908-223710.zip`). No external VC runtime imports
+remain in that executable. This is not a clean-machine runtime, installer, signing,
+driver or acoustic acceptance result. Hosted CI for the preceding `3f32694` passed:
+[run 34245135022](https://github.com/tang-vu/cantodeck/actions/runs/34245135022).
+
 Independent callback scheduling and bounded reserve (2026-09-08): a new event-driven
 test separates capture/render delivery, rather than batching capture ahead of every
 render. It covers 72 schedules at 48/48, 44.1/48 and 48/44.1 kHz, 128/128, 128/480,

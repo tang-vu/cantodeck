@@ -18,6 +18,12 @@ Successful [Windows CI runs](https://github.com/tang-vu/cantodeck/actions/workfl
 
 Windows 11 x64, Visual Studio 2022 Desktop development with C++, Windows SDK, CMake 3.22+, Git. Initial build downloads the pinned JUCE source; the application needs no network or account.
 
+MSVC builds link the C/C++ runtime statically. Verification and packaging use the
+installed Visual Studio `dumpbin` to reject imports of external VC redistributable
+DLLs; packages include `RUNTIME_DEPENDENCIES.txt` with the executable hash and PE
+imports. This removes that separate runtime prerequisite, but does not establish
+clean-machine execution or universal Windows/device compatibility.
+
 ```powershell
 ./scripts/build.ps1
 ./scripts/verify.ps1

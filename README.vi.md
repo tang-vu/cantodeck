@@ -4,6 +4,11 @@
 
 ## Mở ứng dụng
 
+Bản build mới liên kết runtime Visual C++ vào executable. Khi đóng gói, công cụ
+kiểm tra và từ chối bản còn phụ thuộc DLL Visual C++ riêng; danh sách DLL và hash
+được lưu trong `RUNTIME_DEPENDENCIES.txt`. Việc này chưa thay thế thử chạy trên một
+máy Windows sạch, và bản phát hành vẫn chưa được ký số.
+
 Chế độ **Giảm trễ** giữ mức đệm nhỏ lúc kết nối. Nếu thực sự thiếu mẫu mic, ứng dụng
 có thể tăng mức đệm dự phòng tối đa hai bước để phục hồi; xem `target` trong chẩn đoán.
 Mức này không tự giảm cho đến khi kết nối lại. Đây là đánh đổi thêm độ trễ để giảm

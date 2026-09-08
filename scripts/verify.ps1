@@ -3,6 +3,7 @@ $repoPath = Split-Path $PSScriptRoot -Parent
 $evidencePath = Join-Path $repoPath ('build/evidence-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
 New-Item -ItemType Directory -Path $evidencePath | Out-Null
 $exe = Join-Path $repoPath 'build/CantoDeck_artefacts/Release/CantoDeck.exe'
+& "$PSScriptRoot/check-runtime.ps1" -Executable $exe -ReportPath "$evidencePath/runtime-dependencies.txt"
 $identityProcess = Start-Process -FilePath $exe -ArgumentList @('--build-info', ('"' + "$evidencePath/build-info.json" + '"')) -WindowStyle Hidden -Wait -PassThru
 if ($identityProcess.ExitCode) { throw 'Build identity export failed' }
 $identity = Get-Content -LiteralPath "$evidencePath/build-info.json" -Raw | ConvertFrom-Json

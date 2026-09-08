@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.22)
 project(CantoDeck VERSION 0.1.0 LANGUAGES C CXX)
+if(MSVC)
+ # Standalone portable executable: do not require a separately installed VC runtime.
+ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 set(CANTO_REVISION "source-archive")
 if(EXISTS "${CMAKE_SOURCE_DIR}/.git")
 execute_process(COMMAND git rev-parse --short=12 HEAD WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"

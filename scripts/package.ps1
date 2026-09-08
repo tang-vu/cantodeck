@@ -4,6 +4,7 @@ $distPath = Join-Path $repoPath 'dist'
 $stagePath = Join-Path $distPath ('CantoDeck-0.1.0-win-x64-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
 New-Item -ItemType Directory -Path "$stagePath/source", "$stagePath/licenses" -Force | Out-Null
 Copy-Item -LiteralPath "$repoPath/build/CantoDeck_artefacts/Release/CantoDeck.exe" -Destination $stagePath
+& "$PSScriptRoot/check-runtime.ps1" -Executable "$stagePath/CantoDeck.exe" -ReportPath "$stagePath/RUNTIME_DEPENDENCIES.txt"
 $buildInfoProcess = Start-Process -FilePath "$stagePath/CantoDeck.exe" -ArgumentList @('--build-info', ('"' + "$stagePath/BUILD_INFO.json" + '"')) -WindowStyle Hidden -Wait -PassThru
 if ($buildInfoProcess.ExitCode) { throw 'Packaged executable build identity failed' }
 $buildInfo = Get-Content -LiteralPath "$stagePath/BUILD_INFO.json" -Raw | ConvertFrom-Json
