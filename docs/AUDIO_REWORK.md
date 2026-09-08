@@ -52,6 +52,23 @@ The goal remains the full project specification and comfortable live singing thr
 
 ## Remaining acceptance work
 
+Accelerated recording endurance (2026-09-08): `scripts/soak-offline.ps1 -Seconds
+1800` completed with exit 0 in 72.935 seconds of renderer wall time. A repeating
+48 kHz tone/impulse/silence fixture entered the actual microphone DSP and recorder;
+the 1800-second source plus two-second tail produced 86,496,000 frames in each
+finalized mix/dry/wet WAV. Mix size 518,976,104 bytes; each mono stem 259,488,104
+bytes. Recorder failure/frame-count checks, reopened channel/frame headers, mute
+and injected-fault silence checks passed. Executable SHA256:
+`67dd6b44fc58ba00569bf9c081d3f27ec7e6c9050d6f3e81dc427723b8798462`.
+Full local report and file hashes: `build/offline-soak-20260908-221317/result.json`.
+The fixture duration parser rejects malformed/out-of-range values, and an existing
+fixture was preserved with unchanged hash on rejected overwrite. A six-second
+script smoke and ordinary full verifier also passed (`build/evidence-20260908-221302`).
+This is not live-clock scheduling, backing-player endurance, physical audio, RTT,
+disk-full recovery or independent comparison of every long-file sample. The live
+hardware matrix remains unpassed. Hosted CI for `4c5b44b` completed successfully:
+[run 34242448059](https://github.com/tang-vu/cantodeck/actions/runs/34242448059).
+
 Measurement continuity gate (2026-09-08): the UI validates analysis against
 control-thread snapshots of FIFO under/overruns and resynchronizations, plus native
 capture discontinuities, timestamp errors and empty-output observations. A changed

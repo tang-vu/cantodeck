@@ -9,6 +9,8 @@
 #include <string>
 #include <thread>
 #include <latch>
+#include <charconv>
+#include <filesystem>
 void check(bool v, const char* message)
 {
     if (!v)
@@ -18,15 +20,27 @@ int main(int argc, char** argv)
 {
     try
     {
-        if (argc == 3 && std::string(argv[1]) == "--fixture")
+        if ((argc == 3 && std::string(argv[1]) == "--fixture") ||
+            (argc == 4 && std::string(argv[1]) == "--fixture-long"))
         {
+            int duration = 3;
+            if (argc == 4)
+            {
+                const std::string requested(argv[3]);
+                const auto parsed = std::from_chars(requested.data(), requested.data() + requested.size(), duration);
+                if (parsed.ec != std::errc{} || parsed.ptr != requested.data() + requested.size() ||
+                    duration < 1 || duration > 1800)
+                    return 2;
+            }
+            if (std::filesystem::exists(argv[2]))
+                return 3;
             std::ofstream file(argv[2], std::ios::binary);
             auto word = [&](uint32_t x, int bytes)
             {
                 for (int i = 0; i < bytes; i++)
                     file.put(char((x >> (i * 8)) & 255));
             };
-            const int n = 48000 * 3;
+            const int n = 48000 * duration;
             file.write("RIFF", 4);
             word(36 + n * 2, 4);
             file.write("WAVEfmt ", 8);
@@ -41,9 +55,10 @@ int main(int argc, char** argv)
             word(n * 2, 4);
             for (int i = 0; i < n; i++)
             {
-                double t = i / 48000.;
-                float v = i < 48000    ? float(0.25 * std::sin(2 * 3.141592653589793 * 440 * t))
-                          : i == 72000 ? 0.8f
+                const int at = i % (48000 * 3);
+                double t = at / 48000.;
+                float v = at < 48000    ? float(0.25 * std::sin(2 * 3.141592653589793 * 440 * t))
+                          : at == 72000 ? 0.8f
                                        : 0.f;
                 word(uint16_t(int16_t(v * 32767)), 2);
             }

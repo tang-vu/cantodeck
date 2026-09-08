@@ -14,6 +14,26 @@ For each row: date, OS build, endpoint manufacturer/model, driver version, backe
 UI checks: no devices, denied mic permission, unavailable saved device, channel 2 absent, paused/end-of-track, clipping, Vietnamese filenames/LRC, long plain text, 100/150/200% DPI, keyboard focus and fullscreen lyrics. Lyrics now use read-only scrolling editors; complete manual interaction/high-DPI coverage remains open.
 # Optional native lifecycle diagnostic
 
+## Separate accelerated offline recording endurance
+
+```powershell
+./scripts/build.ps1
+./scripts/soak-offline.ps1 -Seconds 1800
+```
+
+This opt-in test generates 30 minutes of repeating synthetic input (tone, impulse,
+silence) at 48 kHz, runs the actual microphone DSP and WAV recorder faster than
+wall time, and checks mix/dry/wet frame/channel headers, recorder error counts,
+mute and injected-fault silence through `--render`. The report records executable
+and recording SHA256 hashes, simulated duration and measured wall time. It does
+not independently compare every long-file output sample. Allow about 1.2 GB of
+disk space; generated files are retained under `build/offline-soak-*`.
+Use `-Seconds 6` for a short script check. Neither variant opens audio streams or
+records a physical microphone. This is **not** the 30-minute live hardware gate,
+and does not exercise sustained backing-player decoding or measure RTT.
+
+## Silent control checks
+
 The separate compatibility-control check is explicit and excluded from CI:
 
 ```powershell
