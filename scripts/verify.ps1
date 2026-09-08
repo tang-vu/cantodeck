@@ -3,6 +3,10 @@ $repoPath = Split-Path $PSScriptRoot -Parent
 $evidencePath = Join-Path $repoPath ('build/evidence-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
 New-Item -ItemType Directory -Path $evidencePath | Out-Null
 $exe = Join-Path $repoPath 'build/CantoDeck_artefacts/Release/CantoDeck.exe'
+$identityProcess = Start-Process -FilePath $exe -ArgumentList @('--build-info', ('"' + "$evidencePath/build-info.json" + '"')) -WindowStyle Hidden -Wait -PassThru
+if ($identityProcess.ExitCode) { throw 'Build identity export failed' }
+$identity = Get-Content -LiteralPath "$evidencePath/build-info.json" -Raw | ConvertFrom-Json
+if (!$identity.buildRevision -or $identity.pointerBits -ne 64 -or $identity.juceRevision -ne '91ad83ae34a81e0833b1a2b0866f54846370ae53') { throw 'Unexpected build identity' }
 & "$repoPath/build/Release/core_tests.exe"
 if ($LASTEXITCODE) { throw 'Core tests failed' }
 & "$repoPath/build/Release/stream_tests.exe"

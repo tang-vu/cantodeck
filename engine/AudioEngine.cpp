@@ -1,4 +1,5 @@
 #include "AudioEngine.h"
+#include "BuildInfo.h"
 #if JUCE_WINDOWS
 #include "platform/windows/NativeWasapi.h"
 #endif
@@ -447,6 +448,7 @@ juce::String AudioEngine::diagnostics() const
             "; zero-padding observations: " + juce::String(c.zeroPaddingEvents) + "\nLast HRESULT: 0x" +
             juce::String::toHexString(c.lastError) + "\n";
     }
+    s = "Build " + juce::String(buildRevision) + " | configured " + juce::String(configuredUtc) + "\n" + s;
     if (output && input)
         s += "Input: " + juce::String(input->getCurrentSampleRate()) + " Hz / " +
              juce::String(input->getCurrentBufferSizeSamples()) + " samples; output: " + juce::String(rate) +

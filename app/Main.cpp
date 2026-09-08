@@ -322,6 +322,7 @@ class Console final : public Component, private Timer
         clearQueue.setButtonText(tr("Xóa DS", "Clear queue"));
         queue.setTextWhenNothingSelected(tr("Chọn bài trong danh sách", "Choose a queued song"));
         title.setText("CantoDeck  /  WINDOWS ALPHA", dontSendNotification);
+        title.setTooltip(String("Build ") + canto::buildRevision + " | " + canto::configuredUtc);
         connect.setButtonText(tr("Kết nối", "Connect"));
         refresh.setButtonText(tr("Quét thiết bị", "Refresh devices"));
         monitor.setButtonText(tr("Bật / tắt nghe mic", "Toggle monitoring"));

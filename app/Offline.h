@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/AudioEngine.h"
 #include "platform/windows/InputLevel.h"
+#include "BuildInfo.h"
 
 inline int runOffline(const juce::String& args)
 {
@@ -11,11 +12,21 @@ inline int runOffline(const juce::String& args)
     tokens.removeEmptyStrings();
     if (tokens.size() < 2)
         return 2;
-    auto ownedEngine = std::make_unique<canto::AudioEngine>();
-    auto& engine = *ownedEngine;
     const File destination = File::getCurrentWorkingDirectory().getChildFile(tokens[tokens.size() - 1]);
     if (destination.exists())
         return 3;
+    if (tokens[0] == "--build-info" && tokens.size() == 2)
+    {
+        auto* info = new DynamicObject();
+        info->setProperty("appVersion", canto::appVersion);
+        info->setProperty("buildRevision", canto::buildRevision);
+        info->setProperty("configuredUtc", canto::configuredUtc);
+        info->setProperty("juceRevision", canto::juceRevision);
+        info->setProperty("pointerBits", int(sizeof(void*) * 8));
+        return destination.replaceWithText(JSON::toString(var(info))) ? 0 : 4;
+    }
+    auto ownedEngine = std::make_unique<canto::AudioEngine>();
+    auto& engine = *ownedEngine;
     if (tokens[0] == "--diagnostics" || tokens[0] == "--probe" || tokens[0] == "--probe-low" ||
         tokens[0] == "--probe-native")
     {

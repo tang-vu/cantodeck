@@ -1,0 +1,8 @@
+#pragma once
+namespace canto
+{
+inline constexpr const char* buildRevision = "@CANTO_REVISION@";
+inline constexpr const char* configuredUtc = "@CANTO_CONFIGURED_UTC@";
+inline constexpr const char* appVersion = "@PROJECT_VERSION@";
+inline constexpr const char* juceRevision = "91ad83ae34a81e0833b1a2b0866f54846370ae53";
+}

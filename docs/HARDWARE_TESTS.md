@@ -11,7 +11,7 @@ No acoustic round-trip or singing test has been performed by the agent. All cell
 
 For each row: date, OS build, endpoint manufacturer/model, driver version, backend, requested and actual rate/block, FIFO occupancy/rate correction, under/overruns, recording frame count, audibility and faults. Test safe startup, mute, sustained notes, gain changes, playback/seek, record mix/stems, disk errors and unplug during recording. Confirm re-enable is deliberate. Measure RTT with a documented electrical/acoustic loopback procedure, subtract no delays without recording the method. Keep driver-reported latency distinct.
 
-UI checks: no devices, denied mic permission, unavailable saved device, channel 2 absent, paused/end-of-track, clipping, Vietnamese filenames/LRC, long plain text, 100/150/200% DPI, keyboard focus and fullscreen lyrics. Long lyrics may overflow the label; scrolling plain-text lyrics remains incomplete.
+UI checks: no devices, denied mic permission, unavailable saved device, channel 2 absent, paused/end-of-track, clipping, Vietnamese filenames/LRC, long plain text, 100/150/200% DPI, keyboard focus and fullscreen lyrics. Lyrics now use read-only scrolling editors; complete manual interaction/high-DPI coverage remains open.
 # Optional native lifecycle diagnostic
 
 The separate compatibility-control check is explicit and excluded from CI:

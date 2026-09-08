@@ -10,6 +10,8 @@ Experimental Windows desktop karaoke console, C++20 / JUCE 8.0.15, AGPL-3.0-only
 
 ## Preview downloads
 
+To identify the executable being tested, check its Advanced diagnostics or title tooltip. Portable packages include `BUILD_INFO.json` with the embedded revision, configuration time, JUCE pin, architecture and executable SHA256. A `-dirty` revision denotes local uncommitted changes; keep the matching source bundle when reporting results. These identifiers do not mean a build is signed or has passed hardware acceptance.
+
 Successful [Windows CI runs](https://github.com/tang-vu/cantodeck/actions/workflows/windows.yml) attach an unsigned portable artifact with the executable, matching CantoDeck/JUCE source and license notices. A GitHub login may be required to download workflow artifacts. These are development builds, not a stable release. You can also build locally below.
 
 ## Build and run

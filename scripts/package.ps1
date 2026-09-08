@@ -4,12 +4,20 @@ $distPath = Join-Path $repoPath 'dist'
 $stagePath = Join-Path $distPath ('CantoDeck-0.1.0-win-x64-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
 New-Item -ItemType Directory -Path "$stagePath/source", "$stagePath/licenses" -Force | Out-Null
 Copy-Item -LiteralPath "$repoPath/build/CantoDeck_artefacts/Release/CantoDeck.exe" -Destination $stagePath
+$buildInfoProcess = Start-Process -FilePath "$stagePath/CantoDeck.exe" -ArgumentList @('--build-info', ('"' + "$stagePath/BUILD_INFO.json" + '"')) -WindowStyle Hidden -Wait -PassThru
+if ($buildInfoProcess.ExitCode) { throw 'Packaged executable build identity failed' }
+$buildInfo = Get-Content -LiteralPath "$stagePath/BUILD_INFO.json" -Raw | ConvertFrom-Json
+if (!$buildInfo.buildRevision -or $buildInfo.pointerBits -ne 64) { throw 'Unexpected packaged build identity' }
+$buildInfo | Add-Member -NotePropertyName binarySha256 -NotePropertyValue ((Get-FileHash -LiteralPath "$stagePath/CantoDeck.exe" -Algorithm SHA256).Hash.ToLower())
+[IO.File]::WriteAllText("$stagePath/BUILD_INFO.json", ($buildInfo | ConvertTo-Json) + [Environment]::NewLine)
 foreach ($name in @('README.md','README.vi.md','LICENSE','THIRD_PARTY_NOTICES.md','CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md')) { Copy-Item -LiteralPath (Join-Path $repoPath $name) -Destination $stagePath }
 Copy-Item -LiteralPath "$repoPath/docs" -Destination $stagePath -Recurse
 $jucePath = Join-Path $repoPath 'vendor/JUCE'
 if (!(Test-Path "$jucePath/CMakeLists.txt")) { $jucePath = Join-Path $repoPath 'build/_deps/juce-src' }
 $revision = & git -C $jucePath rev-parse HEAD
 if ($revision -ne '91ad83ae34a81e0833b1a2b0866f54846370ae53') { throw 'JUCE revision does not match pin' }
+$juceChanges = & git -C $jucePath status --porcelain
+if ($LASTEXITCODE -ne 0 -or $juceChanges) { throw 'JUCE checkout must be clean so archived dependency source matches the build' }
 & git -C $jucePath archive --format=zip --output="$stagePath/source/JUCE-8.0.15.zip" HEAD
 if ($LASTEXITCODE) { throw 'JUCE source archive failed' }
 $sourcePaths = @('app','engine','platform','tests','scripts','docs','.github','CMakeLists.txt','.gitignore','.gitattributes','.clang-format','README.md','README.vi.md','CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','LICENSE','THIRD_PARTY_NOTICES.md') | ForEach-Object { Join-Path $repoPath $_ }
