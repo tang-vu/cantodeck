@@ -323,7 +323,7 @@ void AudioEngine::render(const float* const* in, int ni, float* const* out, int 
         float music[2]{};
         if (playing.load() && track)
         {
-            if (position >= track->length - 1 || track->failed.load())
+            if (position >= track->length || track->failed.load())
                 playing = false;
             else
             {

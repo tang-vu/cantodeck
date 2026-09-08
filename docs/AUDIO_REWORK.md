@@ -52,6 +52,16 @@ The goal remains the full project specification and comfortable live singing thr
 
 ## Remaining acceptance work
 
+Final-frame playback regression (2026-09-08): the engine stopped at `length - 1`,
+although the streaming reader can return the final frame. It now stops at `length`.
+The actual-engine `--test-playback` check requires the ending position to reach the
+full source duration (allowing at most one output-frame overshoot for conversion).
+The strengthened check failed on the previous implementation with exit 24 and
+passed after the fix. Release/CTest passed 3/3 and full offline playback, recorded
+WAV/fault-silence and UI/session verification passed in
+`build/evidence-20260908-220424`. This fixes a playback boundary, not microphone
+latency or acoustic acceptance.
+
 Verify native device loss/reconnect, stop/start/pause, missing endpoints, RAW/fallback behavior, physical loop measurements, vocal listening quality and the real external-speaker route. Complete the remaining specification features and the hardware matrix. In particular, a successful Realtek silent stream does not establish sub-20 ms measured RTT or acceptable singing performance on DGM20/other speakers.
 
 Native mode is currently selectable in Advanced, alongside the JUCE compatibility route. The loop measurement plays no sound until the user explicitly presses its button. Do not invoke that button from an automated hardware smoke test.

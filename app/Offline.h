@@ -147,7 +147,10 @@ inline int runOffline(const juce::String& args)
         engine.seek = engine.duration - 0.05;
         for (int i = 0; i < 1000 && engine.playing.load(); ++i)
             tick();
-        if (engine.playing || engine.trackReadFailed() || engine.seconds < engine.duration - 0.001)
+        // Playback must consume the final source frame, not stop one frame early.
+        // Rate conversion may advance by at most one output frame past the end.
+        if (engine.playing || engine.trackReadFailed() || engine.seconds < engine.duration - 1.e-9 ||
+            engine.seconds > engine.duration + 1.0 / 48000 + 1.e-9)
             return 24;
         engine.recorder.stop();
         auto recordedStream = playbackRecording.createInputStream();
