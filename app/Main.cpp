@@ -5,6 +5,7 @@
 #include "LyricText.h"
 #include "SessionState.h"
 #include <future>
+#include <map>
 
 using namespace juce;
 class Console final : public Component, private Timer
@@ -21,6 +22,8 @@ class Console final : public Component, private Timer
     TextEditor details;
     std::unique_ptr<FileChooser> chooser;
     std::vector<File> tracks;
+    std::map<String, File> lyricAssociations;
+    File loadedTrack;
     std::unique_ptr<DocumentWindow> lyricWindow;
     std::unique_ptr<EqWindow> eqWindow;
     LyricText* bigLyric = nullptr;
@@ -150,6 +153,16 @@ class Console final : public Component, private Timer
                 files.add(file.getFullPathName());
             o->setProperty("queue", var(files));
             o->setProperty("lyricsOffsetSeconds", offset.getValue());
+            Array<var> associations;
+            for (const auto& track : tracks)
+                if (const auto found = lyricAssociations.find(track.getFullPathName()); found != lyricAssociations.end())
+                {
+                    auto* entry = new DynamicObject();
+                    entry->setProperty("track", track.getFullPathName());
+                    entry->setProperty("lyrics", found->second.getFullPathName());
+                    associations.add(var(entry));
+                }
+            o->setProperty("lyricAssociations", var(associations));
         }
         return var(o);
     }
@@ -239,6 +252,22 @@ class Console final : public Component, private Timer
                 queue.setSelectedId(0, dontSendNotification);
             }
             const auto lyricOffset = v["lyricsOffsetSeconds"];
+            lyricAssociations.clear();
+            if (auto* associations = v["lyricAssociations"].getArray())
+                for (int i = 0; i < std::min(128, associations->size()); ++i)
+                {
+                    const auto& entry = (*associations)[i];
+                    if (!entry["track"].isString() || !entry["lyrics"].isString())
+                        continue;
+                    const auto trackPath = entry["track"].toString(), lyricPath = entry["lyrics"].toString();
+                    if (trackPath.length() > 32767 || lyricPath.length() > 32767 ||
+                        !File::isAbsolutePath(trackPath) || !File::isAbsolutePath(lyricPath))
+                        continue;
+                    const File trackFile(trackPath), lyricFile(lyricPath);
+                    if (std::find(tracks.begin(), tracks.end(), trackFile) != tracks.end() &&
+                        lyricFile.hasFileExtension("lrc;txt"))
+                        lyricAssociations[trackPath] = lyricFile;
+                }
             if ((lyricOffset.isDouble() || lyricOffset.isInt()) && std::isfinite(double(lyricOffset)))
                 offset.setValue(jlimit(-20., 20., double(lyricOffset)), dontSendNotification);
         }
@@ -264,6 +293,11 @@ class Console final : public Component, private Timer
                                  if (safe && fc.getResult() != File{})
                                      action(fc.getResult());
                              });
+    }
+    File lyricsForTrack(const File& track) const
+    {
+        const auto found = lyricAssociations.find(track.getFullPathName());
+        return found != lyricAssociations.end() ? found->second : track.withFileExtension("lrc");
     }
     void readLyrics(const File& file)
     {
@@ -321,6 +355,9 @@ class Console final : public Component, private Timer
             if (line.time < 0)
                 plainLines.add(line.text);
         untimedLyrics = plainLines.joinIntoString("\n");
+        if (loadedTrack != File{} && (lyricAssociations.size() < 128 ||
+                                     lyricAssociations.contains(loadedTrack.getFullPathName())))
+            lyricAssociations[loadedTrack.getFullPathName()] = file;
     }
     void localize()
     {
@@ -395,6 +432,7 @@ class Console final : public Component, private Timer
         clearQueue.onClick = [this]
         {
             tracks.clear();
+            lyricAssociations.clear();
             queue.clear(dontSendNotification);
         };
         eqEditor.setButtonText("EQ 3 bands");
@@ -753,15 +791,24 @@ class Console final : public Component, private Timer
         const auto syntheticPath = File::getCurrentWorkingDirectory().getChildFile(
             String::fromUTF8("build/Bài hát thử không tồn tại.wav"));
         tracks = {syntheticPath, syntheticPath.getSiblingFile("Second synthetic song.wav")};
+        loadedTrack = syntheticPath;
+        readLyrics(lyricFixture);
+        loadedTrack = File{};
+        if (lyricsForTrack(syntheticPath) != lyricFixture ||
+            lyricsForTrack(tracks[1]) != tracks[1].withFileExtension("lrc"))
+            return false;
         offset.setValue(1.25, dontSendNotification);
         const auto session = JSON::parse(JSON::toString(state(true)));
-        if (state().hasProperty("queue") || state().hasProperty("lyricsOffsetSeconds"))
+        if (state().hasProperty("queue") || state().hasProperty("lyricsOffsetSeconds") ||
+            state().hasProperty("lyricAssociations"))
             return false; // Preset export must not disclose the local playlist.
         tracks.clear();
+        lyricAssociations.clear();
         offset.setValue(0, dontSendNotification);
         if (!restore(session, true) || tracks.size() != 2 || tracks[0] != syntheticPath ||
             offset.getValue() != 1.25 || queue.getSelectedId() != 0 || engine.playing.load() ||
-            engine.params.monitor.load() || trackLoad.valid())
+            engine.params.monitor.load() || trackLoad.valid() || loadedTrack != File{} ||
+            lyricAssociations.size() != 1 || lyricsForTrack(syntheticPath) != lyricFixture)
             return false;
         auto malformed = JSON::parse(JSON::toString(session));
         Array<var> entries;
@@ -773,6 +820,22 @@ class Console final : public Component, private Timer
         malformed.getDynamicObject()->setProperty("queue", var(entries));
         malformed.getDynamicObject()->setProperty("lyricsOffsetSeconds", 999);
         if (!restore(malformed, true) || tracks.size() != 125 || offset.getValue() != 20)
+            return false;
+        auto badAssociations = JSON::parse(JSON::toString(session));
+        Array<var> invalidAssociations;
+        auto addAssociation = [&](const var& track, const var& lyric)
+        {
+            auto* value = new DynamicObject();
+            value->setProperty("track", track);
+            value->setProperty("lyrics", lyric);
+            invalidAssociations.add(var(value));
+        };
+        addAssociation(123, lyricFixture.getFullPathName());
+        addAssociation(syntheticPath.getFullPathName(), "relative.lrc");
+        addAssociation(syntheticPath.getFullPathName(), lyricFixture.withFileExtension("exe").getFullPathName());
+        addAssociation(syntheticPath.getSiblingFile("Not in queue.wav").getFullPathName(), lyricFixture.getFullPathName());
+        badAssociations.getDynamicObject()->setProperty("lyricAssociations", var(invalidAssociations));
+        if (!restore(badAssociations, true) || !lyricAssociations.empty())
             return false;
         if (!restore(originalSession, true))
             return false;
@@ -942,9 +1005,13 @@ class Console final : public Component, private Timer
                 lines.clear();
                 untimedLyrics.clear();
                 fileLyricOffset = 0;
-                auto lrc = pendingTrack.withFileExtension("lrc");
+                loadedTrack = pendingTrack;
+                auto lrc = lyricsForTrack(loadedTrack);
                 if (lrc.existsAsFile())
                     readLyrics(lrc);
+                else if (lyricAssociations.contains(loadedTrack.getFullPathName()))
+                    notify(tr("Không tìm thấy file lời đã lưu; dùng Mở LRC / TXT để chọn lại.",
+                              "Saved lyric file is missing; use Open LRC / TXT to select it again."));
             }
         }
         monitor.setColour(TextButton::buttonColourId,

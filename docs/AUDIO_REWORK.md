@@ -52,6 +52,23 @@ The goal remains the full project specification and comfortable live singing thr
 
 ## Remaining acceptance work
 
+Per-song lyric association (2026-09-08): successfully opening lyrics while a song
+is loaded now associates that LRC/TXT with the song. Up to 128 queue-associated
+descriptors persist only in local sessions, not exported vocal presets. Restoration
+validates absolute bounded paths, allowed lyric extensions and membership in the
+restored WAV queue, without opening media. Explicit song selection resolves the
+saved association; missing saved lyrics report a reselect message rather than
+silently substituting another file. Unassociated songs retain same-name LRC lookup.
+Clear queue also clears saved associations but does not delete media or clear the
+currently displayed lyrics. Isolated UI smoke exercises successful lyric-file
+association, JSON round-trip, fallback lookup, export exclusion, no automatic
+track selection/playback, and rejection of malformed paths/extensions/unlisted songs.
+Release/CTest passed 5/5 and full runtime-import/offline/UI verification passed in
+`build/evidence-20260908-224304`. This does not close hardware/latency acceptance.
+Fresh device enumeration (`build/acceptance-devices-20260908-224027.txt`) still had
+Realtek/Steam endpoints but no DGM20; the owner's external-speaker connection remains
+unspecified. No acoustic probe was automatically played.
+
 Portable runtime follow-up (2026-09-08): dependency inspection found that earlier
 executables imported `MSVCP140.dll`, `VCRUNTIME140.dll` and `VCRUNTIME140_1.dll`.
 MSVC targets now use the static runtime (`MultiThreaded`, debug variant for Debug).

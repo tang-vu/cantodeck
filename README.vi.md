@@ -14,7 +14,7 @@ có thể tăng mức đệm dự phòng tối đa hai bước để phục hồ
 Mức này không tự giảm cho đến khi kết nối lại. Đây là đánh đổi thêm độ trễ để giảm
 gián đoạn khi máy giao dữ liệu không đều, không bảo đảm hết giật hay hát không trễ.
 
-Danh sách tối đa 128 bài WAV và độ lệch lời được lưu trong phiên làm việc trên máy. Mở lại ứng dụng chỉ khôi phục danh sách: bạn chọn bài để tải, không tự phát nhạc hay bật mic. **Xóa DS** không xóa file và không dừng bài đang tải/phát. Đường dẫn danh sách không được đưa vào preset giọng xuất ra; file session vẫn chứa đường dẫn cục bộ, nên kiểm tra trước khi chia sẻ.
+Danh sách tối đa 128 bài WAV, độ lệch lời chỉnh tay và liên kết LRC/TXT cho từng bài được lưu trong phiên làm việc trên máy. Khi bài đã tải xong, mở file lời để ghi nhớ lựa chọn cho bài đó. Mở lại ứng dụng chỉ khôi phục đường dẫn: bạn chọn bài để tải, không tự phát nhạc hay bật mic. File lời đã lưu bị mất sẽ có thông báo chọn lại; bài chưa có liên kết vẫn tìm LRC cùng tên. **Xóa DS** xóa danh sách và liên kết đã lưu, không xóa file, lời đang hiển thị hoặc dừng bài đang tải/phát. Đường dẫn nhạc/lời không được đưa vào preset giọng xuất ra; file session vẫn chứa đường dẫn cục bộ, nên kiểm tra trước khi chia sẻ.
 
 Lời TXT có thể cuộn trong khung chính và cửa sổ lời; dòng chứa dấu ngoặc vuông trong TXT được giữ nguyên. File LRC/TXT tối đa 256 KiB. LRC hỗ trợ timestamp phút:giây với phần thập phân đến ba chữ số và thẻ `[offset:+500]` (mili giây; số dương làm lời sớm hơn). Offset trong file được cộng với thanh chỉnh tay, không thay đổi thanh này hay độ trễ âm thanh. Nhận số nguyên tối đa sáu chữ số trong khoảng ±600.000 ms; thẻ sai bị bỏ qua, thẻ hợp lệ cuối cùng được dùng. Mở file lời khác sẽ đặt lại offset từ file; TXT không diễn giải thẻ.
 
