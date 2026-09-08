@@ -1,5 +1,6 @@
 #include "engine/Core.h"
 #include "engine/audio/LatencyProbe.h"
+#include "engine/audio/ServiceIntervals.h"
 #include <iostream>
 #include <stdexcept>
 #include <limits>
@@ -46,6 +47,17 @@ int main(int argc, char** argv)
             return file ? 0 : 1;
         }
         canto::Ring<int, 4> q;
+        canto::ServiceIntervals intervals;
+        intervals.observe(0);
+        check(intervals.maxTicks() == 0, "first service tick has no interval");
+        intervals.observe(10);
+        intervals.observe(40);
+        intervals.observe(45);
+        check(intervals.maxTicks() == 30, "service interval keeps largest observed gap");
+        intervals.observe(1);
+        check(intervals.maxTicks() == 30, "backwards timestamp cannot underflow interval");
+        intervals.reset();
+        check(intervals.maxTicks() == 0, "service timing reset clears history");
         for (int i = 0; i < 4; i++)
             check(q.push(i), "ring capacity");
         check(!q.push(4), "overflow bounded");

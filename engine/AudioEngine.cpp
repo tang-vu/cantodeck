@@ -432,6 +432,10 @@ juce::String AudioEngine::diagnostics() const
             "\nCapture packets/render callbacks: " + juce::String(c.capturePackets) + " / " +
             juce::String(c.renderCallbacks) +
             "; capture discontinuities: " + juce::String(c.captureDiscontinuities) +
+            " (first packet: " + juce::String(c.initialCaptureDiscontinuities) +
+            "); capture timestamp errors: " + juce::String(c.captureTimestampErrors) +
+            "\nMax capture/render service interval: " + juce::String(c.maxCaptureServiceGapMs, 2) + " / " +
+            juce::String(c.maxRenderServiceGapMs, 2) + " ms (service timing, not RTT)" +
             "; zero-padding observations: " + juce::String(c.zeroPaddingEvents) + "\nLast HRESULT: 0x" +
             juce::String::toHexString(c.lastError) + "\n";
     }

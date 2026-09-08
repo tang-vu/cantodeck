@@ -1,5 +1,6 @@
 #include "NativeWasapi.h"
 #include "engine/Core.h"
+#include "engine/audio/ServiceIntervals.h"
 #define NOMINMAX
 #include <windows.h>
 #include <audioclient.h>
@@ -296,6 +297,9 @@ struct NativeWasapi::Impl
     std::atomic<bool> running{false}, paused{false}, inside{false};
     std::atomic<uint64_t> captured{0}, rendered{0}, discontinuities{0}, starvations{0};
     std::atomic<uint32_t> error{0};
+    std::atomic<uint64_t> initialDiscontinuities{0}, timestampErrors{0};
+    ServiceIntervals captureIntervals, renderIntervals;
+    double ticksPerSecond = 1;
     BackendFormat actual;
     BackendCallbacks callbacks;
     Impl() { stop.event(true); }
@@ -308,6 +312,16 @@ struct NativeWasapi::Impl
         try
         {
             require(com.status);
+            LARGE_INTEGER clockFrequency{};
+            if (!QueryPerformanceFrequency(&clockFrequency) || clockFrequency.QuadPart <= 0)
+                throw E_FAIL;
+            ticksPerSecond = double(clockFrequency.QuadPart);
+            auto ticks = []() noexcept
+            {
+                LARGE_INTEGER time{};
+                QueryPerformanceCounter(&time);
+                return uint64_t(time.QuadPart);
+            };
             auto e = enumerator();
             auto devices = list(e.Get());
             auto in = findDevice(e.Get(), devices, config.input, true),
@@ -371,8 +385,15 @@ struct NativeWasapi::Impl
                     UINT32 n = 0;
                     DWORD flags = 0;
                     require(input.capture->GetBuffer(&data, &n, &flags, nullptr, nullptr));
+                    captureIntervals.observe(ticks());
                     if (flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY)
+                    {
                         ++discontinuities;
+                        if (captured.load() == 0)
+                            ++initialDiscontinuities;
+                    }
+                    if (flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR)
+                        ++timestampErrors;
                     const int channels = std::min<int>(2, input.wave.Format.nChannels);
                     for (UINT32 offset = 0; offset < n; offset += 32768)
                     {
@@ -408,6 +429,7 @@ struct NativeWasapi::Impl
                     {
                         BYTE* data = nullptr;
                         require(output.render->GetBuffer(n, &data));
+                        renderIntervals.observe(ticks());
                         if (!silenced)
                         {
                             callbacks.process(callbacks.context, nullptr, 0, outs, 2, int(n), false);
@@ -485,6 +507,11 @@ std::string NativeWasapi::open(const BackendConfiguration& config, BackendCallba
     impl->rendered = 0;
     impl->discontinuities = 0;
     impl->starvations = 0;
+    impl->initialDiscontinuities = 0;
+    impl->timestampErrors = 0;
+    impl->captureIntervals.reset();
+    impl->renderIntervals.reset();
+    impl->ticksPerSecond = 1;
     impl->paused = false;
     if (!callbacks.prepare || !callbacks.process || !std::isfinite(config.sampleRate) ||
         config.sampleRate < 8000 || config.sampleRate > 192000 || config.periodFrames < 1 ||
@@ -525,6 +552,8 @@ BackendFormat NativeWasapi::format() const
 BackendCounters NativeWasapi::counters() const
 {
     return {impl->captured.load(), impl->rendered.load(), impl->discontinuities.load(),
-            impl->starvations.load(), impl->error.load()};
+            impl->starvations.load(), impl->error.load(), impl->initialDiscontinuities.load(),
+            impl->timestampErrors.load(), impl->captureIntervals.maxTicks() * 1000.0 / impl->ticksPerSecond,
+            impl->renderIntervals.maxTicks() * 1000.0 / impl->ticksPerSecond};
 }
 } // namespace canto

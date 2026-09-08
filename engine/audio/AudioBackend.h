@@ -36,6 +36,8 @@ struct BackendCounters
 {
     uint64_t capturePackets = 0, renderCallbacks = 0, captureDiscontinuities = 0, zeroPaddingEvents = 0;
     uint32_t lastError = 0;
+    uint64_t initialCaptureDiscontinuities = 0, captureTimestampErrors = 0;
+    double maxCaptureServiceGapMs = 0, maxRenderServiceGapMs = 0;
 };
 class AudioBackend
 {

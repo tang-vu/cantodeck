@@ -112,6 +112,10 @@ int main(int argc, char** argv)
             const auto format = backend.format();
             const auto counters = backend.counters();
             check(counters.lastError == 0 && callbacks.failed == 0, "runtime backend error");
+            check(counters.initialCaptureDiscontinuities <= 1 &&
+                      counters.initialCaptureDiscontinuities <= counters.captureDiscontinuities &&
+                      counters.maxCaptureServiceGapMs > 0 && counters.maxRenderServiceGapMs > 0,
+                  "service timing/first-packet counters are inconsistent");
             backend.close();
             const auto closedCapture = callbacks.captured.load(), closedRender = callbacks.rendered.load();
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -121,6 +125,9 @@ int main(int argc, char** argv)
                       << " Hz; periods " << format.inputPeriod << '/' << format.outputPeriod
                       << "; capture discontinuities " << counters.captureDiscontinuities
                       << "; empty-padding observations " << counters.zeroPaddingEvents << '\n';
+            std::cout << "first-packet discontinuities " << counters.initialCaptureDiscontinuities
+                      << "; capture/render maximum service gap " << counters.maxCaptureServiceGapMs
+                      << '/' << counters.maxRenderServiceGapMs << " ms (not RTT)\n";
         }
         check(callbacks.prepared == 3, "each reopen must prepare exactly once");
         std::cout << "PASS: three open/pause/resume/close cycles. No recording, tones, audibility or RTT claim.\n";
