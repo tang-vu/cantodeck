@@ -61,11 +61,12 @@ class LatencyProbe
     }
     bool begin() noexcept
     {
+        if (captured.empty())
+            return false;
         auto state = phase.load();
         if (state != State::idle && state != State::complete && state != State::cancelled)
             return false;
-        phase = State::requested;
-        return true;
+        return phase.compare_exchange_strong(state, State::requested);
     }
     void cancel() noexcept { phase = State::cancelled; }
     State state() const noexcept { return phase.load(); }
@@ -79,7 +80,8 @@ class LatencyProbe
         if (phase.load() == State::requested)
         {
             position = 0;
-            phase = State::capturing;
+            auto expected = State::requested;
+            phase.compare_exchange_strong(expected, State::capturing);
         }
         return phase.load() == State::capturing && position < signalLength ? excitation[position] : 0.f;
     }
@@ -91,7 +93,10 @@ class LatencyProbe
             emitted[position] = std::isfinite(actualOutput) ? actualOutput : 0.f;
         captured[position] = std::isfinite(returnedInput) ? returnedInput : 0.f;
         if (++position == captured.size())
-            phase.store(State::ready, std::memory_order_release);
+        {
+            auto expected = State::capturing;
+            phase.compare_exchange_strong(expected, State::ready);
+        }
     }
     // Worker thread only. Returns an explicit invalid result for silence,
     // ambiguous returns or clipping; never substitutes a buffer-based estimate.

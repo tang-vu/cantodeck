@@ -56,10 +56,27 @@ int main(int argc, char** argv)
         }
         int x;
         check(!q.pop(x), "underflow bounded");
+        {
+            canto::LatencyProbe unprepared;
+            check(!unprepared.begin(), "unprepared measurement must not start");
+            check(unprepared.signal() == 0, "unprepared measurement is silent");
+        }
         for (double sr : {44100., 48000.})
         {
             canto::LatencyProbe probe;
             probe.prepare(sr);
+            check(probe.begin(), "prepared measurement starts");
+            check(!probe.begin(), "measurement cannot be started twice");
+            probe.cancel();
+            check(probe.signal() == 0 && !probe.busy(), "cancel before capture remains silent");
+            check(!probe.analyse().valid, "cancelled measurement has no result");
+            check(probe.begin(), "cancelled measurement can restart");
+            probe.signal();
+            probe.feed(0, 0);
+            probe.cancel();
+            probe.feed(1, 1);
+            check(probe.signal() == 0 && probe.state() == canto::LatencyProbe::State::cancelled,
+                  "cancel during capture is not republished as ready");
             probe.begin();
             const size_t lag = size_t(sr * 0.023);
             std::vector<float> delayed(lag + 1);
@@ -83,6 +100,40 @@ int main(int argc, char** argv)
                 probe.feed(0, generated);
             }
             check(!probe.analyse().valid, "latency detector must reject silence");
+            // Every run is bounded, including failures to publish a completed capture.
+            auto measure = [&](auto returned, bool muteOutput = false)
+            {
+                check(probe.begin(), "measurement restart");
+                std::vector<float> history(size_t(sr) + 4096, 0.f);
+                for (size_t i = 0; i < history.size() && probe.busy(); ++i)
+                {
+                    const float generated = probe.signal();
+                    history[i] = muteOutput ? 0.f : generated;
+                    probe.feed(returned(history, i), history[i]);
+                    if (probe.state() == canto::LatencyProbe::State::ready)
+                        break;
+                }
+                check(probe.state() == canto::LatencyProbe::State::ready, "measurement completes in bound");
+                return probe.analyse();
+            };
+            auto inverted = measure([&](const auto& history, size_t i)
+                                    { return i >= lag ? -0.3f * history[i - lag] + 0.01f : 0.01f; });
+            check(inverted.valid && inverted.inverted &&
+                      std::abs(inverted.milliseconds - double(lag) * 1000 / sr) < 0.01,
+                  "measurement accepts inverted return with DC offset");
+            auto ambiguous = measure([&](const auto& history, size_t i)
+                                     {
+                                         const size_t second = lag + size_t(sr * 0.12);
+                                         return (i >= lag ? history[i - lag] : 0.f) +
+                                                (i >= second ? history[i - second] : 0.f);
+                                     });
+            check(!ambiguous.valid && ambiguous.reason == "Ambiguous returns or competing audio",
+                  "measurement rejects two equally strong separated paths");
+            auto clipped = measure([](const auto&, size_t) { return 1.f; });
+            check(!clipped.valid && clipped.reason == "Input clipped", "measurement rejects clipping");
+            auto muted = measure([](const auto&, size_t) { return 0.f; }, true);
+            check(!muted.valid && muted.reason == "Output muted or probe too quiet",
+                  "measurement rejects muted output rather than reporting zero latency");
             canto::SamplePeakLimiter limiter;
             limiter.prepare(sr);
             for (int i = 0; i < int(sr); ++i)
@@ -295,7 +346,8 @@ int main(int argc, char** argv)
                   "resampler preserves 10 kHz vocal harmonics under fractional drift");
         }
         std::cout << "PASS: FIFO, DSP impulse/finite/mute, delay timing, compressor, +/-1000 ppm drift, "
-                     "source loss\n";
+                     "source loss, sinc response, transparent voice, linked limiter, latency measurement "
+                     "and invalid-return/cancellation handling\n";
         return 0;
     }
     catch (const std::exception& e)
